@@ -1,0 +1,10 @@
+# ComfyUI-H3-Conditioning-Cache has no additional Python dependencies beyond
+# what ComfyUI itself already ships (torch, folder_paths, comfy.*).
+#
+# Everything this plugin imports is part of the ComfyUI runtime:
+#   torch, folder_paths, comfy.model_management, comfy.nested_tensor,
+#   comfy_execution.graph, comfy_execution.graph_utils (for the loop nodes)
+#
+# The H3 model itself and its core nodes (MiniMaxH3ReferenceToVideo,
+# EmptyMiniMaxH3LatentAV, VAEDecodeAudio, CreateVideo, ...) are provided by
+# the MiniMax H3 ComfyUI pack. See models.md for install guidance.

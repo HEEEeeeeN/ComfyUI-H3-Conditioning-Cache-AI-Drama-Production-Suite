@@ -1,0 +1,658 @@
+"""H3 for-loop batch generation nodes.
+
+Ported from ComfyUI_GJJ_Nodes (gjj_for_loop.py) into this plugin so the H3
+conditioning-cache pipeline does not depend on the GJJ plugin.
+
+The structure mirrors the reference `for.json` workflow:
+    H3LoadConditioningList  (batch: load all .pt into one list)
+                 |
+    H3ForLoopStart(total=N) -> index
+                 |
+    H3ConditioningIndex(list, index) -> current shot CONDITIONING
+                 |
+          [single processing chain: model already loaded outside]
+                 |
+    H3ForLoopEnd(flow, ...) -> feeds next round / final output
+
+Loops are expanded at execution time via ComfyUI's GraphBuilder + dynprompt,
+so the loop body (conditioning select -> sample -> decode -> save -> free)
+is a SINGLE chain that is cloned once per iteration, instead of N parallel
+chains. Model / VAE / CLIP / LoRA loaders stay OUTSIDE the loop and are
+shared across all iterations.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import os
+import torch
+import folder_paths
+import comfy.model_management as model_management
+
+try:
+    import nodes as comfy_nodes
+    from comfy_execution.graph import ExecutionBlocker
+    from comfy_execution.graph_utils import GraphBuilder, is_link
+except Exception:  # pragma: no cover
+    comfy_nodes = None
+    ExecutionBlocker = None
+    GraphBuilder = None
+    is_link = None
+
+# Reuse the cache helpers from h3_conditioning_cache.py
+from .h3_conditioning_cache import (
+    _convert_from_serializable,
+    _extract_conditioning_and_meta,
+    _compute_frame_count,
+    _move_to_device,
+    _resolve_cache_path,
+    _scan_pt_files,
+)
+
+MAX_FLOW_NUM = 20
+ANY_TYPE = "*"
+H3_COND_BATCH = "H3_COND_BATCH"
+H3_COND_NAMES = "H3_COND_NAMES"
+
+
+class AlwaysEqualProxy(str):
+    def __eq__(self, _: object) -> bool:
+        return True
+
+    def __ne__(self, _: object) -> bool:
+        return False
+
+
+class TautologyStr(str):
+    def __ne__(self, _: object) -> bool:
+        return False
+
+
+class ByPassTypeTuple(tuple):
+    def __getitem__(self, index):
+        if isinstance(index, int) and index > 0:
+            index = 0
+        item = super().__getitem__(index)
+        if isinstance(item, str):
+            return TautologyStr(item)
+        return item
+
+
+any_type = AlwaysEqualProxy(ANY_TYPE)
+
+
+def _require_graph_builder() -> None:
+    if GraphBuilder is None or is_link is None:
+        raise RuntimeError("当前 ComfyUI 缺少 GraphBuilder，无法执行 H3 循环节点。")
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+
+def _candidate_node_ids(dynprompt: Any, node_id: Any) -> list[Any]:
+    ids: list[Any] = []
+    if node_id is not None:
+        ids.append(node_id)
+    try:
+        display_id = dynprompt.get_display_node_id(node_id)
+        if display_id not in ids:
+            ids.append(display_id)
+    except Exception:
+        pass
+    return ids
+
+
+def _read_start_total(dynprompt: Any, open_node_id: Any, fallback: int = 1) -> Any:
+    if dynprompt is None:
+        return fallback
+    for candidate_id in _candidate_node_ids(dynprompt, open_node_id):
+        try:
+            node = dynprompt.get_node(candidate_id)
+        except Exception:
+            continue
+        class_type = node.get("class_type")
+        inputs = node.get("inputs", {})
+        if class_type in ("H3ForLoopStart", "H3ForLoopWhileStart"):
+            if class_type == "H3ForLoopStart":
+                return inputs.get("total", fallback)
+            return inputs.get("condition", fallback)
+    return fallback
+
+
+def _total_status_text(total: Any, fallback: int = 1) -> str:
+    if is_link is not None and is_link(total):
+        return "外部输入"
+    return str(max(1, _safe_int(total, fallback)))
+
+
+def _log(msg: str) -> None:
+    try:
+        print(f"[H3Cache] {msg}")
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Internal while-loop nodes (created by the start/end nodes at expansion time)
+# ---------------------------------------------------------------------------
+class H3ForLoopWhileStart:
+    CATEGORY = "H3Cache/循环"
+    DEPRECATED = True
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        inputs = {
+            "required": {
+                "condition": ("BOOLEAN", {"default": True, "display_name": "是否继续"}),
+            },
+            "optional": {},
+        }
+        for i in range(MAX_FLOW_NUM):
+            inputs["optional"][f"initial_value{i}"] = (
+                any_type,
+                {"display_name": f"初始值 {i}"},
+            )
+        return inputs
+
+    RETURN_TYPES = ByPassTypeTuple(tuple(["FLOW_CONTROL"] + [any_type] * MAX_FLOW_NUM))
+    RETURN_NAMES = ByPassTypeTuple(tuple(["循环控制"] + [f"值{i}" for i in range(MAX_FLOW_NUM)]))
+    FUNCTION = "while_loop_open"
+
+    def while_loop_open(self, condition: bool, **kwargs):
+        values = []
+        for i in range(MAX_FLOW_NUM):
+            value = kwargs.get(f"initial_value{i}", None)
+            values.append(value if condition else ExecutionBlocker(None))
+        return tuple(["stub"] + values)
+
+
+class H3ForLoopIntAdd:
+    CATEGORY = "H3Cache/循环"
+    DEPRECATED = True
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "a": ("INT", {"default": 0, "display_name": "数值 A"}),
+                "b": ("INT", {"default": 1, "display_name": "数值 B"}),
+            },
+            "optional": {
+                "status_total": ("STRING", {"default": "", "display_name": "总轮次"}),
+            },
+        }
+
+    RETURN_TYPES = ("INT",)
+    RETURN_NAMES = ("结果",)
+    FUNCTION = "add"
+
+    def add(self, a: int, b: int, status_total: str = ""):
+        result = _safe_int(a) + _safe_int(b)
+        total_value = _safe_int(status_total, 0)
+        if total_value > 0:
+            _log(f"循环进度：第 {min(result + 1, total_value)} / {total_value} 轮")
+        return (result,)
+
+
+class H3ForLoopIntLess:
+    CATEGORY = "H3Cache/循环"
+    DEPRECATED = True
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "a": ("INT", {"default": 0, "display_name": "数值 A"}),
+                "b": ("INT", {"default": 1, "display_name": "数值 B"}),
+            }
+        }
+
+    RETURN_TYPES = ("BOOLEAN",)
+    RETURN_NAMES = ("是否小于",)
+    FUNCTION = "less"
+
+    def less(self, a: int, b: int):
+        return (_safe_int(a) < _safe_int(b),)
+
+
+class H3ForLoopWhileEnd:
+    CATEGORY = "H3Cache/循环"
+    DEPRECATED = True
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        inputs = {
+            "required": {
+                "flow": ("FLOW_CONTROL", {"rawLink": True, "display_name": "循环控制"}),
+                "condition": ("BOOLEAN", {"display_name": "是否继续"}),
+            },
+            "optional": {},
+            "hidden": {
+                "dynprompt": "DYNPROMPT",
+                "unique_id": "UNIQUE_ID",
+                "extra_pnginfo": "EXTRA_PNGINFO",
+            },
+        }
+        for i in range(MAX_FLOW_NUM):
+            inputs["optional"][f"initial_value{i}"] = (
+                any_type,
+                {"display_name": f"循环值 {i}"},
+            )
+        return inputs
+
+    RETURN_TYPES = ByPassTypeTuple(tuple([any_type] * MAX_FLOW_NUM))
+    RETURN_NAMES = ByPassTypeTuple(tuple([f"值{i}" for i in range(MAX_FLOW_NUM)]))
+    FUNCTION = "while_loop_close"
+
+    def explore_dependencies(self, node_id: Any, dynprompt: Any, upstream: dict, parent_ids: list) -> None:
+        node_info = dynprompt.get_node(node_id)
+        if "inputs" not in node_info:
+            return
+        for value in node_info["inputs"].values():
+            if is_link(value):
+                parent_id = value[0]
+                display_id = dynprompt.get_display_node_id(parent_id)
+                display_node = dynprompt.get_node(display_id)
+                if display_node.get("class_type") not in {"H3ForLoopEnd", "H3ForLoopWhileEnd"}:
+                    parent_ids.append(display_id)
+                if parent_id not in upstream:
+                    upstream[parent_id] = []
+                    self.explore_dependencies(parent_id, dynprompt, upstream, parent_ids)
+                upstream[parent_id].append(node_id)
+
+    def explore_output_nodes(self, dynprompt: Any, upstream: dict, output_nodes: dict, parent_ids: list) -> None:
+        for parent_id in upstream:
+            display_id = dynprompt.get_display_node_id(parent_id)
+            for output_id, linked_input in output_nodes.items():
+                linked_node_id = linked_input[0]
+                if linked_node_id in parent_ids and display_id == linked_node_id and output_id not in upstream[parent_id]:
+                    if "." in str(parent_id):
+                        parts = str(parent_id).split(".")
+                        parts[-1] = str(output_id)
+                        upstream[parent_id].append(".".join(parts))
+                    else:
+                        upstream[parent_id].append(output_id)
+
+    def collect_contained(self, node_id: Any, upstream: dict, contained: dict) -> None:
+        if node_id not in upstream:
+            return
+        for child_id in upstream[node_id]:
+            if child_id not in contained:
+                contained[child_id] = True
+                self.collect_contained(child_id, upstream, contained)
+
+    def while_loop_close(self, flow, condition, dynprompt=None, unique_id=None, **kwargs):
+        _require_graph_builder()
+        if not condition:
+            return tuple(kwargs.get(f"initial_value{i}", None) for i in range(MAX_FLOW_NUM))
+
+        upstream: dict[Any, list] = {}
+        parent_ids: list[Any] = []
+        self.explore_dependencies(unique_id, dynprompt, upstream, parent_ids)
+        parent_ids = list(set(parent_ids))
+
+        output_nodes = {}
+        prompts = dynprompt.get_original_prompt()
+        mappings = getattr(comfy_nodes, "NODE_CLASS_MAPPINGS", {}) if comfy_nodes is not None else {}
+        for node_id, node in prompts.items():
+            if "inputs" not in node:
+                continue
+            class_def = mappings.get(node.get("class_type"))
+            if getattr(class_def, "OUTPUT_NODE", False):
+                for value in node["inputs"].values():
+                    if is_link(value):
+                        output_nodes[node_id] = value
+
+        graph = GraphBuilder()
+        self.explore_output_nodes(dynprompt, upstream, output_nodes, parent_ids)
+        contained = {}
+        open_node = flow[0]
+        self.collect_contained(open_node, upstream, contained)
+        contained[unique_id] = True
+        contained[open_node] = True
+
+        for node_id in contained:
+            original_node = dynprompt.get_node(node_id)
+            node = graph.node(original_node["class_type"], "Recurse" if node_id == unique_id else node_id)
+            node.set_override_display_id(node_id)
+        for node_id in contained:
+            original_node = dynprompt.get_node(node_id)
+            node = graph.lookup_node("Recurse" if node_id == unique_id else node_id)
+            for key, value in original_node["inputs"].items():
+                if is_link(value) and value[0] in contained:
+                    parent = graph.lookup_node(value[0])
+                    node.set_input(key, parent.out(value[1]))
+                else:
+                    node.set_input(key, value)
+
+        new_open = graph.lookup_node(open_node)
+        for i in range(MAX_FLOW_NUM):
+            key = f"initial_value{i}"
+            new_open.set_input(key, kwargs.get(key, None))
+        my_clone = graph.lookup_node("Recurse")
+        return {
+            "result": tuple(my_clone.out(i) for i in range(MAX_FLOW_NUM)),
+            "expand": graph.finalize(),
+        }
+
+
+# ---------------------------------------------------------------------------
+# Public for-loop nodes
+# ---------------------------------------------------------------------------
+class H3ForLoopStart:
+    CATEGORY = "H3Cache/循环"
+    DESCRIPTION = "H3 For 循环开始节点。默认只显示一组初始值/值输出；值 1 连线后自动扩展值 2。"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "total": ("INT", {"default": 1, "min": 1, "max": 100000, "step": 1, "display_name": "总循环次数"}),
+            },
+            "optional": {
+                f"initial_value{i}": (any_type, {"display_name": f"初始值 {i}"})
+                for i in range(1, MAX_FLOW_NUM)
+            },
+            "hidden": {
+                "initial_value0": (any_type,),
+                "prompt": "PROMPT",
+                "extra_pnginfo": "EXTRA_PNGINFO",
+                "unique_id": "UNIQUE_ID",
+            },
+        }
+
+    RETURN_TYPES = ByPassTypeTuple(tuple(["FLOW_CONTROL", "INT"] + [any_type] * (MAX_FLOW_NUM - 1)))
+    RETURN_NAMES = ByPassTypeTuple(tuple(["循环控制", "当前序号"] + [f"值 {i}" for i in range(1, MAX_FLOW_NUM)]))
+    FUNCTION = "for_loop_start"
+
+    def for_loop_start(self, total: int, prompt=None, extra_pnginfo=None, unique_id=None, **kwargs):
+        _require_graph_builder()
+        total = max(1, _safe_int(total, 1))
+        index = _safe_int(kwargs.get("initial_value0", 0), 0)
+        _log(f"For循环开始：第 {index + 1} / {total} 轮")
+
+        initial_values = {f"initial_value{i}": kwargs.get(f"initial_value{i}", None) for i in range(1, MAX_FLOW_NUM)}
+        graph = GraphBuilder()
+        graph.node("H3ForLoopWhileStart", condition=total, initial_value0=index, **initial_values)
+        outputs = [kwargs.get(f"initial_value{i}", None) for i in range(1, MAX_FLOW_NUM)]
+        return {
+            "result": tuple(["stub", index] + outputs),
+            "expand": graph.finalize(),
+        }
+
+
+class H3ForLoopEnd:
+    CATEGORY = "H3Cache/循环"
+    DESCRIPTION = "H3 For 循环结束节点。接收本轮更新后的 value，并决定是否展开下一轮。"
+    OUTPUT_NODE = True
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "flow": ("FLOW_CONTROL", {"rawLink": True, "display_name": "循环控制"}),
+            },
+            "optional": {
+                f"initial_value{i}": (any_type, {"rawLink": True, "display_name": f"值 {i}"})
+                for i in range(1, MAX_FLOW_NUM)
+            },
+            "hidden": {
+                "dynprompt": "DYNPROMPT",
+                "extra_pnginfo": "EXTRA_PNGINFO",
+                "unique_id": "UNIQUE_ID",
+            },
+        }
+
+    RETURN_TYPES = ByPassTypeTuple(tuple([any_type] * (MAX_FLOW_NUM - 1)))
+    RETURN_NAMES = ByPassTypeTuple(tuple([f"值 {i}" for i in range(1, MAX_FLOW_NUM)]))
+    FUNCTION = "for_loop_end"
+
+    def for_loop_end(self, flow, dynprompt=None, extra_pnginfo=None, unique_id=None, **kwargs):
+        _require_graph_builder()
+        graph = GraphBuilder()
+        while_open = flow[0]
+        total = _read_start_total(dynprompt, while_open, 1)
+        total_text = _total_status_text(total, 1)
+
+        next_index = graph.node(
+            "H3ForLoopIntAdd",
+            a=[while_open, 1],
+            b=1,
+            status_total=str(total if not (is_link is not None and is_link(total)) else ""),
+        )
+        condition = graph.node("H3ForLoopIntLess", a=next_index.out(0), b=total)
+        input_values = {f"initial_value{i}": kwargs.get(f"initial_value{i}", None) for i in range(1, MAX_FLOW_NUM)}
+        while_close = graph.node(
+            "H3ForLoopWhileEnd",
+            flow=flow,
+            condition=condition.out(0),
+            initial_value0=next_index.out(0),
+            **input_values,
+        )
+
+        _log(f"For循环回传：准备判断下一轮，总循环 {total_text} 轮")
+        return {
+            "result": tuple(while_close.out(i) for i in range(1, MAX_FLOW_NUM)),
+            "expand": graph.finalize(),
+        }
+
+
+# ---------------------------------------------------------------------------
+# Batch load all .pt into a single list, then index into it inside the loop
+# ---------------------------------------------------------------------------
+class H3LoadConditioningList:
+    """Load every cached .pt into one H3_COND_BATCH list (NOT ComfyUI's batch
+    sockets). Inside a for loop, pair this with H3ConditioningIndex to pull the
+    current shot by index. Leave `shots` empty to load everything found."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "shots": ("STRING", {
+                    "default": "",
+                    "multiline": True,
+                    "tooltip": "逗号分隔的镜头名，例如 A01,A02,A03。留空则加载缓存目录下全部 .pt。",
+                }),
+            },
+            "optional": {
+                "cache_dir": ("STRING", {
+                    "default": "",
+                    "tooltip": "自定义缓存目录（绝对路径）。留空则自动搜索 output、output/h3_cond_cache 与 input 目录。",
+                }),
+            },
+        }
+
+    RETURN_TYPES = (H3_COND_BATCH, H3_COND_NAMES, "INT")
+    RETURN_NAMES = ("cond_list", "shot_names", "count")
+    FUNCTION = "load"
+    CATEGORY = "H3Cache"
+
+    def load(self, shots, cache_dir=""):
+        if cache_dir is None:
+            cache_dir = ""
+        names = [s.strip() for s in (shots or "").split(",") if s.strip()]
+        if not names:
+            names = [os.path.splitext(n)[0] for n in _scan_pt_files()]
+
+        device = model_management.get_torch_device()
+        outs = []
+        for nm in names:
+            fname = nm if nm.endswith(".pt") else nm + ".pt"
+            path = _resolve_cache_path(fname, cache_dir)
+            data = torch.load(path, map_location="cpu", weights_only=False)
+            cond_data, meta = _extract_conditioning_and_meta(data)
+            cond = _convert_from_serializable(cond_data)
+            cond = _move_to_device(cond, device)
+            mb = os.path.getsize(path) / (1024 * 1024)
+            _log(f"list loaded {nm} <- {path} ({mb:.1f} MB) -> {device}")
+            outs.append(cond)
+        return (outs, names, len(outs))
+
+
+class H3ShotNameByIndex:
+    """Pull the shot name at `index` out of an H3_COND_NAMES list. Feed the
+    loop's `当前序号` output into `index` to get the current shot's name, and
+    connect the result to SaveVideo's filename_prefix for per-shot output."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "shot_names": (H3_COND_NAMES,),
+                "index": ("INT", {"default": 0, "min": 0, "display_name": "索引"}),
+            },
+            "optional": {
+                "prefix": ("STRING", {
+                    "default": "",
+                    "display_name": "保存前缀",
+                    "tooltip": "可选子目录前缀，例如 video/h3，会拼成 video/h3/镜头名。留空则直接输出镜头名。",
+                }),
+            },
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("save_path",)
+    FUNCTION = "shot"
+    CATEGORY = "H3Cache"
+
+    def shot(self, shot_names, index, prefix=""):
+        if shot_names is None:
+            raise ValueError("[H3Cache] shot_names 为空")
+        idx = _safe_int(index, 0)
+        if idx < 0 or idx >= len(shot_names):
+            raise IndexError(f"[H3Cache] 索引 {idx} 超出 shot_names 长度 {len(shot_names)}")
+        name = str(shot_names[idx])
+        prefix = (prefix or "").strip()
+        if prefix:
+            return (f"{prefix.rstrip('/')}/{name}",)
+        return (name,)
+
+
+class H3ConditioningIndex:
+    """Pull the conditioning at `index` out of an H3_COND_BATCH list. Feed the
+    loop's `当前序号` output into `index` to process one shot per iteration."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "cond_list": (H3_COND_BATCH,),
+                "index": ("INT", {"default": 0, "min": 0, "display_name": "索引"}),
+            },
+        }
+
+    RETURN_TYPES = ("CONDITIONING",)
+    RETURN_NAMES = ("conditioning",)
+    FUNCTION = "index"
+    CATEGORY = "H3Cache"
+
+    def index(self, cond_list, index):
+        if cond_list is None:
+            raise ValueError("[H3Cache] cond_list 为空")
+        idx = _safe_int(index, 0)
+        if idx < 0 or idx >= len(cond_list):
+            raise IndexError(f"[H3Cache] 索引 {idx} 超出 cond_list 长度 {len(cond_list)}")
+        return (cond_list[idx],)
+
+
+class H3ReadConditioningMeta:
+    """Read metadata (duration, width, height, frame_count) from cached .pt files.
+
+    Designed for the for-loop workflow: takes the same shot_names list and index
+    as H3ShotNameByIndex / H3ConditioningIndex, resolves the corresponding .pt
+    file, and returns its metadata.
+
+    Typical connections in a for-loop:
+        H3LoadConditioningList.shot_names -> H3ReadConditioningMeta.shot_names
+        H3ForLoopStart.index             -> H3ReadConditioningMeta.index
+        H3ReadConditioningMeta.duration  -> ComfyMathExpression (or EmptyLatent.length)
+        H3ReadConditioningMeta.width     -> EmptyMiniMaxH3LatentAV.width
+        H3ReadConditioningMeta.height    -> EmptyMiniMaxH3LatentAV.height
+
+    This allows mixing shots of different durations in a single for-loop,
+    eliminating the need to group shots by duration.
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "shot_names": (H3_COND_NAMES,),
+                "index": ("INT", {"default": 0, "min": 0, "display_name": "索引"}),
+            },
+            "optional": {
+                "cache_dir": ("STRING", {
+                    "default": "",
+                    "tooltip": "自定义缓存目录（绝对路径）。留空则自动搜索 output、output/h3_cond_cache 与 input 目录。",
+                }),
+            },
+        }
+
+    RETURN_TYPES = ("FLOAT", "INT", "INT", "INT")
+    RETURN_NAMES = ("duration", "width", "height", "frame_count")
+    FUNCTION = "read_meta"
+    CATEGORY = "H3Cache"
+
+    def read_meta(self, shot_names, index, cache_dir=""):
+        if cache_dir is None:
+            cache_dir = ""
+        if shot_names is None:
+            raise ValueError("[H3Cache] shot_names is empty")
+        idx = _safe_int(index, 0)
+        if idx < 0 or idx >= len(shot_names):
+            raise IndexError(f"[H3Cache] index {idx} out of range {len(shot_names)}")
+
+        name = str(shot_names[idx])
+        fname = name if name.endswith(".pt") else name + ".pt"
+        path = _resolve_cache_path(fname, cache_dir)
+
+        data = torch.load(path, map_location="cpu", weights_only=False)
+        _, meta = _extract_conditioning_and_meta(data)
+
+        duration = float(meta.get("duration", 0))
+        width = int(meta.get("width", 0))
+        height = int(meta.get("height", 0))
+        fps = int(meta.get("frame_rate", 24))
+
+        if meta.get("frame_count"):
+            frame_count = int(meta["frame_count"])
+        elif duration > 0:
+            frame_count = _compute_frame_count(duration, fps)
+        else:
+            frame_count = 0
+
+        _log(f"meta read {name}: duration={duration}s, {width}x{height}, frames={frame_count}")
+        return (duration, width, height, frame_count)
+
+
+NODE_CLASS_MAPPINGS = {
+    "H3ForLoopStart": H3ForLoopStart,
+    "H3ForLoopEnd": H3ForLoopEnd,
+    "H3ForLoopWhileStart": H3ForLoopWhileStart,
+    "H3ForLoopWhileEnd": H3ForLoopWhileEnd,
+    "H3ForLoopIntAdd": H3ForLoopIntAdd,
+    "H3ForLoopIntLess": H3ForLoopIntLess,
+    "H3LoadConditioningList": H3LoadConditioningList,
+    "H3ConditioningIndex": H3ConditioningIndex,
+    "H3ShotNameByIndex": H3ShotNameByIndex,
+    "H3ReadConditioningMeta": H3ReadConditioningMeta,
+}
+
+NODE_DISPLAY_NAME_MAPPINGS = {
+    "H3ForLoopStart": "H3 For循环开始",
+    "H3ForLoopEnd": "H3 For循环结束",
+    "H3ForLoopWhileStart": "H3 循环开始（内部引用）",
+    "H3ForLoopWhileEnd": "H3 循环结束（内部引用）",
+    "H3ForLoopIntAdd": "H3 整数加法（内部引用）",
+    "H3ForLoopIntLess": "H3 整数小于（内部引用）",
+    "H3LoadConditioningList": "H3 批量加载 .pt 为 list",
+    "H3ConditioningIndex": "H3 按索引取 conditioning",
+    "H3ShotNameByIndex": "H3 按索引取镜头名",
+    "H3ReadConditioningMeta": "H3 读取 .pt 元数据",
+}

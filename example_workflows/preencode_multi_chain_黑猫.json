@@ -1,0 +1,3797 @@
+{
+ "id": "denghuang-h3-preencode-黑猫",
+ "revision": 0,
+ "last_node_id": 54,
+ "last_link_id": 128,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "CLIPLoader",
+   "pos": [
+    -1800,
+    -400
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "CLIP",
+     "type": "CLIP",
+     "slot_index": 0,
+     "links": [
+      1,
+      12,
+      23,
+      34,
+      45,
+      56,
+      67,
+      78
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "CLIPLoader"
+   },
+   "widgets_values": [
+    "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+    "minimax",
+    "default"
+   ],
+   "title": "H3 CLIP (Qwen3VL 32B)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 2,
+   "type": "VAELoader",
+   "pos": [
+    -1800,
+    -300
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "VAE",
+     "type": "VAE",
+     "slot_index": 0,
+     "links": [
+      2,
+      13,
+      24,
+      35,
+      46,
+      57,
+      68,
+      79
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAELoader"
+   },
+   "widgets_values": [
+    "minimax_h3_video_vae_fp16.safetensors"
+   ],
+   "title": "Video VAE",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 3,
+   "type": "VAELoader",
+   "pos": [
+    -1800,
+    -200
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "VAE",
+     "type": "VAE",
+     "slot_index": 0,
+     "links": [
+      3,
+      14,
+      25,
+      36,
+      47,
+      58,
+      69,
+      80
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAELoader"
+   },
+   "widgets_values": [
+    "minimax_h3_audio_vae_fp32.safetensors"
+   ],
+   "title": "Audio VAE",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 4,
+   "type": "ResolutionSelector",
+   "pos": [
+    -1800,
+    -100
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "width",
+     "type": "INT",
+     "slot_index": 0,
+     "links": [
+      7,
+      18,
+      29,
+      40,
+      51,
+      62,
+      73,
+      84,
+      106,
+      109,
+      112,
+      115,
+      118,
+      121,
+      124,
+      127
+     ]
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "slot_index": 1,
+     "links": [
+      8,
+      19,
+      30,
+      41,
+      52,
+      63,
+      74,
+      85,
+      107,
+      110,
+      113,
+      116,
+      119,
+      122,
+      125,
+      128
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ResolutionSelector"
+   },
+   "widgets_values": [
+    "16:9 (Widescreen)",
+    0.9,
+    32
+   ],
+   "title": "Resolution 16:9",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 5,
+   "type": "LoadImage",
+   "pos": [
+    -1300,
+    0
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "slot_index": 0,
+     "links": [
+      90,
+      92,
+      94,
+      96,
+      98,
+      100
+     ]
+    },
+    {
+     "name": "MASK",
+     "type": "MASK",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "LoadImage"
+   },
+   "widgets_values": [
+    "B05_场景.png",
+    "image"
+   ],
+   "title": "Load B05_场景 (B05_场景.png)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 6,
+   "type": "LoadImage",
+   "pos": [
+    -900,
+    0
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "slot_index": 0,
+     "links": [
+      102,
+      104
+     ]
+    },
+    {
+     "name": "MASK",
+     "type": "MASK",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "LoadImage"
+   },
+   "widgets_values": [
+    "A28_场景.png",
+    "image"
+   ],
+   "title": "Load A28_场景 (A28_场景.png)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 7,
+   "type": "LoadImage",
+   "pos": [
+    -900,
+    160
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "slot_index": 0,
+     "links": [
+      89,
+      91,
+      93,
+      95,
+      97,
+      99,
+      101,
+      103
+     ]
+    },
+    {
+     "name": "MASK",
+     "type": "MASK",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "LoadImage"
+   },
+   "widgets_values": [
+    "h3_ref/角色/黑猫沈天然/沈天然黑猫定妆照.png",
+    "image"
+   ],
+   "title": "Load 黑猫 (h3_ref/角色/黑猫沈天然/沈天然黑猫定妆照.png)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 8,
+   "type": "PrimitiveFloat",
+   "pos": [
+    -1800,
+    360
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "slot_index": 0,
+     "links": [
+      9,
+      105
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "PrimitiveFloat"
+   },
+   "widgets_values": [
+    4
+   ],
+   "title": "Duration",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 9,
+   "type": "ComfyMathExpression",
+   "pos": [
+    -1500,
+    360
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "values.a",
+     "type": "FLOAT",
+     "link": 9
+    }
+   ],
+   "outputs": [
+    {
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "slot_index": 0,
+     "links": []
+    },
+    {
+     "name": "INT",
+     "type": "INT",
+     "slot_index": 1,
+     "links": [
+      10
+     ]
+    },
+    {
+     "name": "BOOL",
+     "type": "BOOL",
+     "slot_index": 2,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ComfyMathExpression"
+   },
+   "widgets_values": [
+    "max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17"
+   ],
+   "title": "Frame Count",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 10,
+   "type": "easy promptLine",
+   "pos": [
+    -1500,
+    520
+   ],
+   "size": [
+    500,
+    300
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": null
+    },
+    {
+     "name": "start_index",
+     "type": "INT",
+     "link": null
+    },
+    {
+     "name": "max_rows",
+     "type": "INT",
+     "link": null
+    },
+    {
+     "name": "remove_empty_lines",
+     "type": "BOOLEAN",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "STRING",
+     "type": "STRING",
+     "slot_index": 0,
+     "links": [
+      6
+     ]
+    },
+    {
+     "name": "COMBO",
+     "type": "COMBO",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "easy promptLine"
+   },
+   "widgets_values": [
+    "硬朗战场剧情风格，去饱和的灰褐色与蓝黄色调，粗黑轮廓线赛璐璐上色，阴天战场光线穿过浮尘。使用<Picture 1>作为黑猫的身份参考（驱动其身份），使用<Picture 2>作为B05场景环境参考。CUT 1（0-4s）：全景——废弃水泥建筑内部寂静，角落阴影中一声轻轻的猫叫，的轮廓隐约可见于阴影中，丁达尔光柱穿过浮尘，水泥灰墙壁，镜头保持固定，图片1中的角色用轻柔慵懒的嗓音叫 <d>[日文]にゃー</d>。 overall_soundscape: 空旷室内一声轻柔猫叫，微弱回声消散，周遭回归静默。non_diegetic_music: 无背景音乐，禁止任何配乐/音乐，本镜头不要背景音乐，仅保留环境音与音效。",
+    0,
+    1000,
+    true
+   ],
+   "title": "H3 Prompt (B20)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 11,
+   "type": "MiniMaxH3ReferenceToVideo",
+   "pos": [
+    -900,
+    200
+   ],
+   "size": [
+    410,
+    354
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 1
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 2
+    },
+    {
+     "name": "audio_vae",
+     "type": "VAE",
+     "link": 3
+    },
+    {
+     "name": "ref_images.ref_image_0",
+     "type": "IMAGE",
+     "link": 89
+    },
+    {
+     "name": "ref_images.ref_image_1",
+     "type": "IMAGE",
+     "link": 90
+    },
+    {
+     "name": "ref_images.ref_image_2",
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "ref_videos.ref_video_0",
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "ref_video_audios.ref_video_audio_0",
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "ref_audios.ref_audio_0",
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": 6
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "link": 7
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "link": 8
+    },
+    {
+     "name": "length",
+     "type": "INT",
+     "link": 10
+    },
+    {
+     "name": "ref_images.ref_image_3",
+     "type": "IMAGE",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "positive",
+     "type": "CONDITIONING",
+     "slot_index": 0,
+     "links": [
+      11
+     ]
+    },
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3ReferenceToVideo"
+   },
+   "widgets_values": [
+    "",
+    243,
+    1280,
+    736,
+    "match"
+   ],
+   "title": "H3 Ref2Video (B20)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 12,
+   "type": "H3SaveConditioning",
+   "pos": [
+    -400,
+    200
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 11
+    },
+    {
+     "name": "duration",
+     "type": "FLOAT",
+     "link": 105
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "link": 106
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "link": 107
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "H3SaveConditioning"
+   },
+   "widgets_values": [
+    "B20"
+   ],
+   "title": "Save Cond (B20)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 14,
+   "type": "PrimitiveFloat",
+   "pos": [
+    -1800,
+    1080
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "slot_index": 0,
+     "links": [
+      20,
+      108
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "PrimitiveFloat"
+   },
+   "widgets_values": [
+    5
+   ],
+   "title": "Duration",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 15,
+   "type": "ComfyMathExpression",
+   "pos": [
+    -1500,
+    1080
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "values.a",
+     "type": "FLOAT",
+     "link": 20
+    }
+   ],
+   "outputs": [
+    {
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "slot_index": 0,
+     "links": []
+    },
+    {
+     "name": "INT",
+     "type": "INT",
+     "slot_index": 1,
+     "links": [
+      21
+     ]
+    },
+    {
+     "name": "BOOL",
+     "type": "BOOL",
+     "slot_index": 2,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ComfyMathExpression"
+   },
+   "widgets_values": [
+    "max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17"
+   ],
+   "title": "Frame Count",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 16,
+   "type": "easy promptLine",
+   "pos": [
+    -1500,
+    1240
+   ],
+   "size": [
+    500,
+    300
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": null
+    },
+    {
+     "name": "start_index",
+     "type": "INT",
+     "link": null
+    },
+    {
+     "name": "max_rows",
+     "type": "INT",
+     "link": null
+    },
+    {
+     "name": "remove_empty_lines",
+     "type": "BOOLEAN",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "STRING",
+     "type": "STRING",
+     "slot_index": 0,
+     "links": [
+      17
+     ]
+    },
+    {
+     "name": "COMBO",
+     "type": "COMBO",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "easy promptLine"
+   },
+   "widgets_values": [
+    "硬朗战场剧情风格，去饱和的灰褐色与蓝黄色调，粗黑轮廓线赛璐璐上色，阴天战场光线穿过浮尘。使用<Picture 1>作为黑猫的身份参考（驱动其身份），使用<Picture 2>作为B05场景环境参考。CUT 1（0-5s）：近景——图片1中的角色特写，无杂毛，正在舔爪子，水泥灰角落，丁达尔光柱微光照射，镜头保持固定。 overall_soundscape: 黑猫舔爪的沙沙声，轻微呼噜声，室内静寂。non_diegetic_music: 无背景音乐，禁止任何配乐/音乐，本镜头不要背景音乐，仅保留环境音与音效。",
+    0,
+    1000,
+    true
+   ],
+   "title": "H3 Prompt (B23)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 17,
+   "type": "MiniMaxH3ReferenceToVideo",
+   "pos": [
+    -900,
+    920
+   ],
+   "size": [
+    410,
+    354
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 12
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 13
+    },
+    {
+     "name": "audio_vae",
+     "type": "VAE",
+     "link": 14
+    },
+    {
+     "name": "ref_images.ref_image_0",
+     "type": "IMAGE",
+     "link": 91
+    },
+    {
+     "name": "ref_images.ref_image_1",
+     "type": "IMAGE",
+     "link": 92
+    },
+    {
+     "name": "ref_images.ref_image_2",
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "ref_videos.ref_video_0",
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "ref_video_audios.ref_video_audio_0",
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "ref_audios.ref_audio_0",
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": 17
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "link": 18
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "link": 19
+    },
+    {
+     "name": "length",
+     "type": "INT",
+     "link": 21
+    },
+    {
+     "name": "ref_images.ref_image_3",
+     "type": "IMAGE",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "positive",
+     "type": "CONDITIONING",
+     "slot_index": 0,
+     "links": [
+      22
+     ]
+    },
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3ReferenceToVideo"
+   },
+   "widgets_values": [
+    "",
+    243,
+    1280,
+    736,
+    "match"
+   ],
+   "title": "H3 Ref2Video (B23)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 18,
+   "type": "H3SaveConditioning",
+   "pos": [
+    -400,
+    920
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 22
+    },
+    {
+     "name": "duration",
+     "type": "FLOAT",
+     "link": 108
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "link": 109
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "link": 110
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "H3SaveConditioning"
+   },
+   "widgets_values": [
+    "B23"
+   ],
+   "title": "Save Cond (B23)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 20,
+   "type": "PrimitiveFloat",
+   "pos": [
+    -1800,
+    1800
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "slot_index": 0,
+     "links": [
+      31,
+      111
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "PrimitiveFloat"
+   },
+   "widgets_values": [
+    4
+   ],
+   "title": "Duration",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 21,
+   "type": "ComfyMathExpression",
+   "pos": [
+    -1500,
+    1800
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "values.a",
+     "type": "FLOAT",
+     "link": 31
+    }
+   ],
+   "outputs": [
+    {
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "slot_index": 0,
+     "links": []
+    },
+    {
+     "name": "INT",
+     "type": "INT",
+     "slot_index": 1,
+     "links": [
+      32
+     ]
+    },
+    {
+     "name": "BOOL",
+     "type": "BOOL",
+     "slot_index": 2,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ComfyMathExpression"
+   },
+   "widgets_values": [
+    "max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17"
+   ],
+   "title": "Frame Count",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 22,
+   "type": "easy promptLine",
+   "pos": [
+    -1500,
+    1960
+   ],
+   "size": [
+    500,
+    300
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": null
+    },
+    {
+     "name": "start_index",
+     "type": "INT",
+     "link": null
+    },
+    {
+     "name": "max_rows",
+     "type": "INT",
+     "link": null
+    },
+    {
+     "name": "remove_empty_lines",
+     "type": "BOOLEAN",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "STRING",
+     "type": "STRING",
+     "slot_index": 0,
+     "links": [
+      28
+     ]
+    },
+    {
+     "name": "COMBO",
+     "type": "COMBO",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "easy promptLine"
+   },
+   "widgets_values": [
+    "硬朗战场剧情风格，去饱和的灰褐色与蓝黄色调，粗黑轮廓线赛璐璐上色，阴天战场光线穿过浮尘。使用<Picture 1>作为黑猫的身份参考（驱动其身份），使用<Picture 2>作为B05场景环境参考。CUT 1（0-4s）：特写——图片1中的角色在角落打了个哈欠，完全不在意枪声，慵懒姿态，水泥灰角落，镜头保持固定。 overall_soundscape: 黑猫慵懒的哈欠声，轻微呼噜，远处枪声衬出荒诞反差。non_diegetic_music: 无背景音乐，禁止任何配乐/音乐，本镜头不要背景音乐，仅保留环境音与音效。",
+    0,
+    1000,
+    true
+   ],
+   "title": "H3 Prompt (B30)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 23,
+   "type": "MiniMaxH3ReferenceToVideo",
+   "pos": [
+    -900,
+    1640
+   ],
+   "size": [
+    410,
+    354
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 23
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 24
+    },
+    {
+     "name": "audio_vae",
+     "type": "VAE",
+     "link": 25
+    },
+    {
+     "name": "ref_images.ref_image_0",
+     "type": "IMAGE",
+     "link": 93
+    },
+    {
+     "name": "ref_images.ref_image_1",
+     "type": "IMAGE",
+     "link": 94
+    },
+    {
+     "name": "ref_images.ref_image_2",
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "ref_videos.ref_video_0",
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "ref_video_audios.ref_video_audio_0",
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "ref_audios.ref_audio_0",
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": 28
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "link": 29
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "link": 30
+    },
+    {
+     "name": "length",
+     "type": "INT",
+     "link": 32
+    },
+    {
+     "name": "ref_images.ref_image_3",
+     "type": "IMAGE",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "positive",
+     "type": "CONDITIONING",
+     "slot_index": 0,
+     "links": [
+      33
+     ]
+    },
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3ReferenceToVideo"
+   },
+   "widgets_values": [
+    "",
+    243,
+    1280,
+    736,
+    "match"
+   ],
+   "title": "H3 Ref2Video (B30)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 24,
+   "type": "H3SaveConditioning",
+   "pos": [
+    -400,
+    1640
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 33
+    },
+    {
+     "name": "duration",
+     "type": "FLOAT",
+     "link": 111
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "link": 112
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "link": 113
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "H3SaveConditioning"
+   },
+   "widgets_values": [
+    "B30"
+   ],
+   "title": "Save Cond (B30)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 26,
+   "type": "PrimitiveFloat",
+   "pos": [
+    -1800,
+    2520
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "slot_index": 0,
+     "links": [
+      42,
+      114
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "PrimitiveFloat"
+   },
+   "widgets_values": [
+    5
+   ],
+   "title": "Duration",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 27,
+   "type": "ComfyMathExpression",
+   "pos": [
+    -1500,
+    2520
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "values.a",
+     "type": "FLOAT",
+     "link": 42
+    }
+   ],
+   "outputs": [
+    {
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "slot_index": 0,
+     "links": []
+    },
+    {
+     "name": "INT",
+     "type": "INT",
+     "slot_index": 1,
+     "links": [
+      43
+     ]
+    },
+    {
+     "name": "BOOL",
+     "type": "BOOL",
+     "slot_index": 2,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ComfyMathExpression"
+   },
+   "widgets_values": [
+    "max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17"
+   ],
+   "title": "Frame Count",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 28,
+   "type": "easy promptLine",
+   "pos": [
+    -1500,
+    2680
+   ],
+   "size": [
+    500,
+    300
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": null
+    },
+    {
+     "name": "start_index",
+     "type": "INT",
+     "link": null
+    },
+    {
+     "name": "max_rows",
+     "type": "INT",
+     "link": null
+    },
+    {
+     "name": "remove_empty_lines",
+     "type": "BOOLEAN",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "STRING",
+     "type": "STRING",
+     "slot_index": 0,
+     "links": [
+      39
+     ]
+    },
+    {
+     "name": "COMBO",
+     "type": "COMBO",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "easy promptLine"
+   },
+   "widgets_values": [
+    "硬朗战场剧情风格，去饱和的灰褐色与蓝黄色调，粗黑轮廓线赛璐璐上色，阴天战场光线穿过浮尘。使用<Picture 1>作为黑猫的身份参考（驱动其身份），使用<Picture 2>作为B05场景环境参考。CUT 1（0-5s）：全景——废弃通讯站水泥灰内部，焦黑弹孔墙面满是裂痕，角落阴影中一只迈步走向窗边，微亮，猫爪无声踏过碎水泥地面，丁达尔光柱从破碎窗户斜射入室内，浮尘在光柱中飘浮，水泥灰与焦黑色调，镜头以固定机位静止拍摄。 overall_soundscape: 通讯站内部回响的压抑静默，猫爪轻踏碎水泥地面的细微声响，窗外远处隐有断续炮火闷响。non_diegetic_music: 无背景音乐，禁止任何配乐/音乐，本镜头不要背景音乐，仅保留环境音与音效。",
+    0,
+    1000,
+    true
+   ],
+   "title": "H3 Prompt (D01)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 29,
+   "type": "MiniMaxH3ReferenceToVideo",
+   "pos": [
+    -900,
+    2360
+   ],
+   "size": [
+    410,
+    354
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 34
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 35
+    },
+    {
+     "name": "audio_vae",
+     "type": "VAE",
+     "link": 36
+    },
+    {
+     "name": "ref_images.ref_image_0",
+     "type": "IMAGE",
+     "link": 95
+    },
+    {
+     "name": "ref_images.ref_image_1",
+     "type": "IMAGE",
+     "link": 96
+    },
+    {
+     "name": "ref_images.ref_image_2",
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "ref_videos.ref_video_0",
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "ref_video_audios.ref_video_audio_0",
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "ref_audios.ref_audio_0",
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": 39
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "link": 40
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "link": 41
+    },
+    {
+     "name": "length",
+     "type": "INT",
+     "link": 43
+    },
+    {
+     "name": "ref_images.ref_image_3",
+     "type": "IMAGE",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "positive",
+     "type": "CONDITIONING",
+     "slot_index": 0,
+     "links": [
+      44
+     ]
+    },
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3ReferenceToVideo"
+   },
+   "widgets_values": [
+    "",
+    243,
+    1280,
+    736,
+    "match"
+   ],
+   "title": "H3 Ref2Video (D01)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 30,
+   "type": "H3SaveConditioning",
+   "pos": [
+    -400,
+    2360
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 44
+    },
+    {
+     "name": "duration",
+     "type": "FLOAT",
+     "link": 114
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "link": 115
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "link": 116
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "H3SaveConditioning"
+   },
+   "widgets_values": [
+    "D01"
+   ],
+   "title": "Save Cond (D01)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 32,
+   "type": "PrimitiveFloat",
+   "pos": [
+    -1800,
+    3240
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "slot_index": 0,
+     "links": [
+      53,
+      117
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "PrimitiveFloat"
+   },
+   "widgets_values": [
+    5
+   ],
+   "title": "Duration",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 33,
+   "type": "ComfyMathExpression",
+   "pos": [
+    -1500,
+    3240
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "values.a",
+     "type": "FLOAT",
+     "link": 53
+    }
+   ],
+   "outputs": [
+    {
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "slot_index": 0,
+     "links": []
+    },
+    {
+     "name": "INT",
+     "type": "INT",
+     "slot_index": 1,
+     "links": [
+      54
+     ]
+    },
+    {
+     "name": "BOOL",
+     "type": "BOOL",
+     "slot_index": 2,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ComfyMathExpression"
+   },
+   "widgets_values": [
+    "max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17"
+   ],
+   "title": "Frame Count",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 34,
+   "type": "easy promptLine",
+   "pos": [
+    -1500,
+    3400
+   ],
+   "size": [
+    500,
+    300
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": null
+    },
+    {
+     "name": "start_index",
+     "type": "INT",
+     "link": null
+    },
+    {
+     "name": "max_rows",
+     "type": "INT",
+     "link": null
+    },
+    {
+     "name": "remove_empty_lines",
+     "type": "BOOLEAN",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "STRING",
+     "type": "STRING",
+     "slot_index": 0,
+     "links": [
+      50
+     ]
+    },
+    {
+     "name": "COMBO",
+     "type": "COMBO",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "easy promptLine"
+   },
+   "widgets_values": [
+    "硬朗战场剧情风格，去饱和的灰褐色与蓝黄色调，粗黑轮廓线赛璐璐上色，阴天战场光线穿过浮尘。使用<Picture 1>作为黑猫的身份参考（驱动其身份），使用<Picture 2>作为B05场景环境参考。CUT 1（0-5s）：中景——图片1中的角色轻跃上水泥窗台，在暖琥珀色阳光中打滚翻肚皮，无杂毛，焦黑窗框，窗外战场硝烟朦胧，水泥灰色调，暖琥珀光线，镜头以固定机位静止拍摄。 overall_soundscape: 猫打滚时皮毛摩擦的沙沙声，嘴里发出满足的轻呼噜，窗外远处战场硝烟的闷响。non_diegetic_music: 无背景音乐，禁止任何配乐/音乐，本镜头不要背景音乐，仅保留环境音与音效。",
+    0,
+    1000,
+    true
+   ],
+   "title": "H3 Prompt (D02)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 35,
+   "type": "MiniMaxH3ReferenceToVideo",
+   "pos": [
+    -900,
+    3080
+   ],
+   "size": [
+    410,
+    354
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 45
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 46
+    },
+    {
+     "name": "audio_vae",
+     "type": "VAE",
+     "link": 47
+    },
+    {
+     "name": "ref_images.ref_image_0",
+     "type": "IMAGE",
+     "link": 97
+    },
+    {
+     "name": "ref_images.ref_image_1",
+     "type": "IMAGE",
+     "link": 98
+    },
+    {
+     "name": "ref_images.ref_image_2",
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "ref_videos.ref_video_0",
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "ref_video_audios.ref_video_audio_0",
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "ref_audios.ref_audio_0",
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": 50
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "link": 51
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "link": 52
+    },
+    {
+     "name": "length",
+     "type": "INT",
+     "link": 54
+    },
+    {
+     "name": "ref_images.ref_image_3",
+     "type": "IMAGE",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "positive",
+     "type": "CONDITIONING",
+     "slot_index": 0,
+     "links": [
+      55
+     ]
+    },
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3ReferenceToVideo"
+   },
+   "widgets_values": [
+    "",
+    243,
+    1280,
+    736,
+    "match"
+   ],
+   "title": "H3 Ref2Video (D02)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 36,
+   "type": "H3SaveConditioning",
+   "pos": [
+    -400,
+    3080
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 55
+    },
+    {
+     "name": "duration",
+     "type": "FLOAT",
+     "link": 117
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "link": 118
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "link": 119
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "H3SaveConditioning"
+   },
+   "widgets_values": [
+    "D02"
+   ],
+   "title": "Save Cond (D02)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 38,
+   "type": "PrimitiveFloat",
+   "pos": [
+    -1800,
+    3960
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "slot_index": 0,
+     "links": [
+      64,
+      120
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "PrimitiveFloat"
+   },
+   "widgets_values": [
+    5
+   ],
+   "title": "Duration",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 39,
+   "type": "ComfyMathExpression",
+   "pos": [
+    -1500,
+    3960
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "values.a",
+     "type": "FLOAT",
+     "link": 64
+    }
+   ],
+   "outputs": [
+    {
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "slot_index": 0,
+     "links": []
+    },
+    {
+     "name": "INT",
+     "type": "INT",
+     "slot_index": 1,
+     "links": [
+      65
+     ]
+    },
+    {
+     "name": "BOOL",
+     "type": "BOOL",
+     "slot_index": 2,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ComfyMathExpression"
+   },
+   "widgets_values": [
+    "max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17"
+   ],
+   "title": "Frame Count",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 40,
+   "type": "easy promptLine",
+   "pos": [
+    -1500,
+    4120
+   ],
+   "size": [
+    500,
+    300
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": null
+    },
+    {
+     "name": "start_index",
+     "type": "INT",
+     "link": null
+    },
+    {
+     "name": "max_rows",
+     "type": "INT",
+     "link": null
+    },
+    {
+     "name": "remove_empty_lines",
+     "type": "BOOLEAN",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "STRING",
+     "type": "STRING",
+     "slot_index": 0,
+     "links": [
+      61
+     ]
+    },
+    {
+     "name": "COMBO",
+     "type": "COMBO",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "easy promptLine"
+   },
+   "widgets_values": [
+    "硬朗战场剧情风格，去饱和的灰褐色与蓝黄色调，粗黑轮廓线赛璐璐上色，阴天战场光线穿过浮尘。使用<Picture 1>作为黑猫的身份参考（驱动其身份），使用<Picture 2>作为B05场景环境参考。CUT 1（0-5s）：近景——图片1中的角色在窗台上舔毛清洁，逆光剪影边缘镶暖琥珀光，无杂毛，背景战场硝烟与废墟剪影，暖琥珀逆光穿过浮尘，镜头以固定机位静止拍摄。 overall_soundscape: 猫舔毛的细微湿响，呼噜声延续，远处炮声渐远。non_diegetic_music: 无背景音乐，禁止任何配乐/音乐，本镜头不要背景音乐，仅保留环境音与音效。",
+    0,
+    1000,
+    true
+   ],
+   "title": "H3 Prompt (D03)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 41,
+   "type": "MiniMaxH3ReferenceToVideo",
+   "pos": [
+    -900,
+    3800
+   ],
+   "size": [
+    410,
+    354
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 56
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 57
+    },
+    {
+     "name": "audio_vae",
+     "type": "VAE",
+     "link": 58
+    },
+    {
+     "name": "ref_images.ref_image_0",
+     "type": "IMAGE",
+     "link": 99
+    },
+    {
+     "name": "ref_images.ref_image_1",
+     "type": "IMAGE",
+     "link": 100
+    },
+    {
+     "name": "ref_images.ref_image_2",
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "ref_videos.ref_video_0",
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "ref_video_audios.ref_video_audio_0",
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "ref_audios.ref_audio_0",
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": 61
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "link": 62
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "link": 63
+    },
+    {
+     "name": "length",
+     "type": "INT",
+     "link": 65
+    },
+    {
+     "name": "ref_images.ref_image_3",
+     "type": "IMAGE",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "positive",
+     "type": "CONDITIONING",
+     "slot_index": 0,
+     "links": [
+      66
+     ]
+    },
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3ReferenceToVideo"
+   },
+   "widgets_values": [
+    "",
+    243,
+    1280,
+    736,
+    "match"
+   ],
+   "title": "H3 Ref2Video (D03)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 42,
+   "type": "H3SaveConditioning",
+   "pos": [
+    -400,
+    3800
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 66
+    },
+    {
+     "name": "duration",
+     "type": "FLOAT",
+     "link": 120
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "link": 121
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "link": 122
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "H3SaveConditioning"
+   },
+   "widgets_values": [
+    "D03"
+   ],
+   "title": "Save Cond (D03)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 44,
+   "type": "PrimitiveFloat",
+   "pos": [
+    -1800,
+    4680
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "slot_index": 0,
+     "links": [
+      75,
+      123
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "PrimitiveFloat"
+   },
+   "widgets_values": [
+    4
+   ],
+   "title": "Duration",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 45,
+   "type": "ComfyMathExpression",
+   "pos": [
+    -1500,
+    4680
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "values.a",
+     "type": "FLOAT",
+     "link": 75
+    }
+   ],
+   "outputs": [
+    {
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "slot_index": 0,
+     "links": []
+    },
+    {
+     "name": "INT",
+     "type": "INT",
+     "slot_index": 1,
+     "links": [
+      76
+     ]
+    },
+    {
+     "name": "BOOL",
+     "type": "BOOL",
+     "slot_index": 2,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ComfyMathExpression"
+   },
+   "widgets_values": [
+    "max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17"
+   ],
+   "title": "Frame Count",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 46,
+   "type": "easy promptLine",
+   "pos": [
+    -1500,
+    4840
+   ],
+   "size": [
+    500,
+    300
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": null
+    },
+    {
+     "name": "start_index",
+     "type": "INT",
+     "link": null
+    },
+    {
+     "name": "max_rows",
+     "type": "INT",
+     "link": null
+    },
+    {
+     "name": "remove_empty_lines",
+     "type": "BOOLEAN",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "STRING",
+     "type": "STRING",
+     "slot_index": 0,
+     "links": [
+      72
+     ]
+    },
+    {
+     "name": "COMBO",
+     "type": "COMBO",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "easy promptLine"
+   },
+   "widgets_values": [
+    "硬朗战场剧情风格，去饱和的灰褐色与蓝黄色调，粗黑轮廓线赛璐璐上色，阴天战场光线穿过浮尘。使用<Picture 1>作为黑猫的身份参考（驱动其身份），使用<Picture 2>作为A28场景环境参考。CUT 1（0-4s）：中景——图片1中的角色从废墟门洞里溜出来，无杂毛，焦黑水泥废墟门洞，黄昏暖琥珀光线，镜头以固定机位静止拍摄。 overall_soundscape: 战场风声，猫轻步踏过碎石的声响，远处游击队士兵的交谈。non_diegetic_music: 无背景音乐，禁止任何配乐/音乐，本镜头不要背景音乐，仅保留环境音与音效。",
+    0,
+    1000,
+    true
+   ],
+   "title": "H3 Prompt (D27)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 47,
+   "type": "MiniMaxH3ReferenceToVideo",
+   "pos": [
+    -900,
+    4520
+   ],
+   "size": [
+    410,
+    354
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 67
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 68
+    },
+    {
+     "name": "audio_vae",
+     "type": "VAE",
+     "link": 69
+    },
+    {
+     "name": "ref_images.ref_image_0",
+     "type": "IMAGE",
+     "link": 101
+    },
+    {
+     "name": "ref_images.ref_image_1",
+     "type": "IMAGE",
+     "link": 102
+    },
+    {
+     "name": "ref_images.ref_image_2",
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "ref_videos.ref_video_0",
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "ref_video_audios.ref_video_audio_0",
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "ref_audios.ref_audio_0",
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": 72
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "link": 73
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "link": 74
+    },
+    {
+     "name": "length",
+     "type": "INT",
+     "link": 76
+    },
+    {
+     "name": "ref_images.ref_image_3",
+     "type": "IMAGE",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "positive",
+     "type": "CONDITIONING",
+     "slot_index": 0,
+     "links": [
+      77
+     ]
+    },
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3ReferenceToVideo"
+   },
+   "widgets_values": [
+    "",
+    243,
+    1280,
+    736,
+    "match"
+   ],
+   "title": "H3 Ref2Video (D27)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 48,
+   "type": "H3SaveConditioning",
+   "pos": [
+    -400,
+    4520
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 77
+    },
+    {
+     "name": "duration",
+     "type": "FLOAT",
+     "link": 123
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "link": 124
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "link": 125
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "H3SaveConditioning"
+   },
+   "widgets_values": [
+    "D27"
+   ],
+   "title": "Save Cond (D27)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 50,
+   "type": "PrimitiveFloat",
+   "pos": [
+    -1800,
+    5400
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "slot_index": 0,
+     "links": [
+      86,
+      126
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "PrimitiveFloat"
+   },
+   "widgets_values": [
+    4
+   ],
+   "title": "Duration",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 51,
+   "type": "ComfyMathExpression",
+   "pos": [
+    -1500,
+    5400
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "values.a",
+     "type": "FLOAT",
+     "link": 86
+    }
+   ],
+   "outputs": [
+    {
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "slot_index": 0,
+     "links": []
+    },
+    {
+     "name": "INT",
+     "type": "INT",
+     "slot_index": 1,
+     "links": [
+      87
+     ]
+    },
+    {
+     "name": "BOOL",
+     "type": "BOOL",
+     "slot_index": 2,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ComfyMathExpression"
+   },
+   "widgets_values": [
+    "max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17"
+   ],
+   "title": "Frame Count",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 52,
+   "type": "easy promptLine",
+   "pos": [
+    -1500,
+    5560
+   ],
+   "size": [
+    500,
+    300
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": null
+    },
+    {
+     "name": "start_index",
+     "type": "INT",
+     "link": null
+    },
+    {
+     "name": "max_rows",
+     "type": "INT",
+     "link": null
+    },
+    {
+     "name": "remove_empty_lines",
+     "type": "BOOLEAN",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "STRING",
+     "type": "STRING",
+     "slot_index": 0,
+     "links": [
+      83
+     ]
+    },
+    {
+     "name": "COMBO",
+     "type": "COMBO",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "easy promptLine"
+   },
+   "widgets_values": [
+    "硬朗战场剧情风格，去饱和的灰褐色与蓝黄色调，粗黑轮廓线赛璐璐上色，阴天战场光线穿过浮尘。使用<Picture 1>作为黑猫的身份参考（驱动其身份），使用<Picture 2>作为A28场景环境参考。CUT 1（0-4s）：全景——图片1中的角色钻进旁边枯黄草丛中消失不见，最后闪一下，黄昏暖琥珀光线，焦黑废墟背景，草丛麦田金色，镜头以固定机位静止拍摄。 overall_soundscape: 战场风声，草丛被猫钻入的窸窣声逐渐远去，远处人声。non_diegetic_music: 无背景音乐，禁止任何配乐/音乐，本镜头不要背景音乐，仅保留环境音与音效。",
+    0,
+    1000,
+    true
+   ],
+   "title": "H3 Prompt (D28)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 53,
+   "type": "MiniMaxH3ReferenceToVideo",
+   "pos": [
+    -900,
+    5240
+   ],
+   "size": [
+    410,
+    354
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 78
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 79
+    },
+    {
+     "name": "audio_vae",
+     "type": "VAE",
+     "link": 80
+    },
+    {
+     "name": "ref_images.ref_image_0",
+     "type": "IMAGE",
+     "link": 103
+    },
+    {
+     "name": "ref_images.ref_image_1",
+     "type": "IMAGE",
+     "link": 104
+    },
+    {
+     "name": "ref_images.ref_image_2",
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "ref_videos.ref_video_0",
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "ref_video_audios.ref_video_audio_0",
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "ref_audios.ref_audio_0",
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": 83
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "link": 84
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "link": 85
+    },
+    {
+     "name": "length",
+     "type": "INT",
+     "link": 87
+    },
+    {
+     "name": "ref_images.ref_image_3",
+     "type": "IMAGE",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "positive",
+     "type": "CONDITIONING",
+     "slot_index": 0,
+     "links": [
+      88
+     ]
+    },
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "slot_index": 1,
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3ReferenceToVideo"
+   },
+   "widgets_values": [
+    "",
+    243,
+    1280,
+    736,
+    "match"
+   ],
+   "title": "H3 Ref2Video (D28)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 54,
+   "type": "H3SaveConditioning",
+   "pos": [
+    -400,
+    5240
+   ],
+   "size": [
+    300,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 88
+    },
+    {
+     "name": "duration",
+     "type": "FLOAT",
+     "link": 126
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "link": 127
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "link": 128
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "H3SaveConditioning"
+   },
+   "widgets_values": [
+    "D28"
+   ],
+   "title": "Save Cond (D28)",
+   "color": "#322",
+   "bgcolor": "#533"
+  }
+ ],
+ "links": [
+  [
+   1,
+   1,
+   0,
+   11,
+   0,
+   "CLIP"
+  ],
+  [
+   2,
+   2,
+   0,
+   11,
+   1,
+   "VAE"
+  ],
+  [
+   3,
+   3,
+   0,
+   11,
+   2,
+   "VAE"
+  ],
+  [
+   6,
+   10,
+   0,
+   11,
+   9,
+   "STRING"
+  ],
+  [
+   7,
+   4,
+   0,
+   11,
+   10,
+   "INT"
+  ],
+  [
+   8,
+   4,
+   1,
+   11,
+   11,
+   "INT"
+  ],
+  [
+   9,
+   8,
+   0,
+   9,
+   0,
+   "FLOAT"
+  ],
+  [
+   10,
+   9,
+   1,
+   11,
+   12,
+   "INT"
+  ],
+  [
+   11,
+   11,
+   0,
+   12,
+   0,
+   "CONDITIONING"
+  ],
+  [
+   12,
+   1,
+   0,
+   17,
+   0,
+   "CLIP"
+  ],
+  [
+   13,
+   2,
+   0,
+   17,
+   1,
+   "VAE"
+  ],
+  [
+   14,
+   3,
+   0,
+   17,
+   2,
+   "VAE"
+  ],
+  [
+   17,
+   16,
+   0,
+   17,
+   9,
+   "STRING"
+  ],
+  [
+   18,
+   4,
+   0,
+   17,
+   10,
+   "INT"
+  ],
+  [
+   19,
+   4,
+   1,
+   17,
+   11,
+   "INT"
+  ],
+  [
+   20,
+   14,
+   0,
+   15,
+   0,
+   "FLOAT"
+  ],
+  [
+   21,
+   15,
+   1,
+   17,
+   12,
+   "INT"
+  ],
+  [
+   22,
+   17,
+   0,
+   18,
+   0,
+   "CONDITIONING"
+  ],
+  [
+   23,
+   1,
+   0,
+   23,
+   0,
+   "CLIP"
+  ],
+  [
+   24,
+   2,
+   0,
+   23,
+   1,
+   "VAE"
+  ],
+  [
+   25,
+   3,
+   0,
+   23,
+   2,
+   "VAE"
+  ],
+  [
+   28,
+   22,
+   0,
+   23,
+   9,
+   "STRING"
+  ],
+  [
+   29,
+   4,
+   0,
+   23,
+   10,
+   "INT"
+  ],
+  [
+   30,
+   4,
+   1,
+   23,
+   11,
+   "INT"
+  ],
+  [
+   31,
+   20,
+   0,
+   21,
+   0,
+   "FLOAT"
+  ],
+  [
+   32,
+   21,
+   1,
+   23,
+   12,
+   "INT"
+  ],
+  [
+   33,
+   23,
+   0,
+   24,
+   0,
+   "CONDITIONING"
+  ],
+  [
+   34,
+   1,
+   0,
+   29,
+   0,
+   "CLIP"
+  ],
+  [
+   35,
+   2,
+   0,
+   29,
+   1,
+   "VAE"
+  ],
+  [
+   36,
+   3,
+   0,
+   29,
+   2,
+   "VAE"
+  ],
+  [
+   39,
+   28,
+   0,
+   29,
+   9,
+   "STRING"
+  ],
+  [
+   40,
+   4,
+   0,
+   29,
+   10,
+   "INT"
+  ],
+  [
+   41,
+   4,
+   1,
+   29,
+   11,
+   "INT"
+  ],
+  [
+   42,
+   26,
+   0,
+   27,
+   0,
+   "FLOAT"
+  ],
+  [
+   43,
+   27,
+   1,
+   29,
+   12,
+   "INT"
+  ],
+  [
+   44,
+   29,
+   0,
+   30,
+   0,
+   "CONDITIONING"
+  ],
+  [
+   45,
+   1,
+   0,
+   35,
+   0,
+   "CLIP"
+  ],
+  [
+   46,
+   2,
+   0,
+   35,
+   1,
+   "VAE"
+  ],
+  [
+   47,
+   3,
+   0,
+   35,
+   2,
+   "VAE"
+  ],
+  [
+   50,
+   34,
+   0,
+   35,
+   9,
+   "STRING"
+  ],
+  [
+   51,
+   4,
+   0,
+   35,
+   10,
+   "INT"
+  ],
+  [
+   52,
+   4,
+   1,
+   35,
+   11,
+   "INT"
+  ],
+  [
+   53,
+   32,
+   0,
+   33,
+   0,
+   "FLOAT"
+  ],
+  [
+   54,
+   33,
+   1,
+   35,
+   12,
+   "INT"
+  ],
+  [
+   55,
+   35,
+   0,
+   36,
+   0,
+   "CONDITIONING"
+  ],
+  [
+   56,
+   1,
+   0,
+   41,
+   0,
+   "CLIP"
+  ],
+  [
+   57,
+   2,
+   0,
+   41,
+   1,
+   "VAE"
+  ],
+  [
+   58,
+   3,
+   0,
+   41,
+   2,
+   "VAE"
+  ],
+  [
+   61,
+   40,
+   0,
+   41,
+   9,
+   "STRING"
+  ],
+  [
+   62,
+   4,
+   0,
+   41,
+   10,
+   "INT"
+  ],
+  [
+   63,
+   4,
+   1,
+   41,
+   11,
+   "INT"
+  ],
+  [
+   64,
+   38,
+   0,
+   39,
+   0,
+   "FLOAT"
+  ],
+  [
+   65,
+   39,
+   1,
+   41,
+   12,
+   "INT"
+  ],
+  [
+   66,
+   41,
+   0,
+   42,
+   0,
+   "CONDITIONING"
+  ],
+  [
+   67,
+   1,
+   0,
+   47,
+   0,
+   "CLIP"
+  ],
+  [
+   68,
+   2,
+   0,
+   47,
+   1,
+   "VAE"
+  ],
+  [
+   69,
+   3,
+   0,
+   47,
+   2,
+   "VAE"
+  ],
+  [
+   72,
+   46,
+   0,
+   47,
+   9,
+   "STRING"
+  ],
+  [
+   73,
+   4,
+   0,
+   47,
+   10,
+   "INT"
+  ],
+  [
+   74,
+   4,
+   1,
+   47,
+   11,
+   "INT"
+  ],
+  [
+   75,
+   44,
+   0,
+   45,
+   0,
+   "FLOAT"
+  ],
+  [
+   76,
+   45,
+   1,
+   47,
+   12,
+   "INT"
+  ],
+  [
+   77,
+   47,
+   0,
+   48,
+   0,
+   "CONDITIONING"
+  ],
+  [
+   78,
+   1,
+   0,
+   53,
+   0,
+   "CLIP"
+  ],
+  [
+   79,
+   2,
+   0,
+   53,
+   1,
+   "VAE"
+  ],
+  [
+   80,
+   3,
+   0,
+   53,
+   2,
+   "VAE"
+  ],
+  [
+   83,
+   52,
+   0,
+   53,
+   9,
+   "STRING"
+  ],
+  [
+   84,
+   4,
+   0,
+   53,
+   10,
+   "INT"
+  ],
+  [
+   85,
+   4,
+   1,
+   53,
+   11,
+   "INT"
+  ],
+  [
+   86,
+   50,
+   0,
+   51,
+   0,
+   "FLOAT"
+  ],
+  [
+   87,
+   51,
+   1,
+   53,
+   12,
+   "INT"
+  ],
+  [
+   88,
+   53,
+   0,
+   54,
+   0,
+   "CONDITIONING"
+  ],
+  [
+   89,
+   7,
+   0,
+   11,
+   3,
+   "IMAGE"
+  ],
+  [
+   90,
+   5,
+   0,
+   11,
+   4,
+   "IMAGE"
+  ],
+  [
+   91,
+   7,
+   0,
+   17,
+   3,
+   "IMAGE"
+  ],
+  [
+   92,
+   5,
+   0,
+   17,
+   4,
+   "IMAGE"
+  ],
+  [
+   93,
+   7,
+   0,
+   23,
+   3,
+   "IMAGE"
+  ],
+  [
+   94,
+   5,
+   0,
+   23,
+   4,
+   "IMAGE"
+  ],
+  [
+   95,
+   7,
+   0,
+   29,
+   3,
+   "IMAGE"
+  ],
+  [
+   96,
+   5,
+   0,
+   29,
+   4,
+   "IMAGE"
+  ],
+  [
+   97,
+   7,
+   0,
+   35,
+   3,
+   "IMAGE"
+  ],
+  [
+   98,
+   5,
+   0,
+   35,
+   4,
+   "IMAGE"
+  ],
+  [
+   99,
+   7,
+   0,
+   41,
+   3,
+   "IMAGE"
+  ],
+  [
+   100,
+   5,
+   0,
+   41,
+   4,
+   "IMAGE"
+  ],
+  [
+   101,
+   7,
+   0,
+   47,
+   3,
+   "IMAGE"
+  ],
+  [
+   102,
+   6,
+   0,
+   47,
+   4,
+   "IMAGE"
+  ],
+  [
+   103,
+   7,
+   0,
+   53,
+   3,
+   "IMAGE"
+  ],
+  [
+   104,
+   6,
+   0,
+   53,
+   4,
+   "IMAGE"
+  ],
+  [
+   105,
+   8,
+   0,
+   12,
+   1,
+   "FLOAT"
+  ],
+  [
+   106,
+   4,
+   0,
+   12,
+   2,
+   "INT"
+  ],
+  [
+   107,
+   4,
+   1,
+   12,
+   3,
+   "INT"
+  ],
+  [
+   108,
+   14,
+   0,
+   18,
+   1,
+   "FLOAT"
+  ],
+  [
+   109,
+   4,
+   0,
+   18,
+   2,
+   "INT"
+  ],
+  [
+   110,
+   4,
+   1,
+   18,
+   3,
+   "INT"
+  ],
+  [
+   111,
+   20,
+   0,
+   24,
+   1,
+   "FLOAT"
+  ],
+  [
+   112,
+   4,
+   0,
+   24,
+   2,
+   "INT"
+  ],
+  [
+   113,
+   4,
+   1,
+   24,
+   3,
+   "INT"
+  ],
+  [
+   114,
+   26,
+   0,
+   30,
+   1,
+   "FLOAT"
+  ],
+  [
+   115,
+   4,
+   0,
+   30,
+   2,
+   "INT"
+  ],
+  [
+   116,
+   4,
+   1,
+   30,
+   3,
+   "INT"
+  ],
+  [
+   117,
+   32,
+   0,
+   36,
+   1,
+   "FLOAT"
+  ],
+  [
+   118,
+   4,
+   0,
+   36,
+   2,
+   "INT"
+  ],
+  [
+   119,
+   4,
+   1,
+   36,
+   3,
+   "INT"
+  ],
+  [
+   120,
+   38,
+   0,
+   42,
+   1,
+   "FLOAT"
+  ],
+  [
+   121,
+   4,
+   0,
+   42,
+   2,
+   "INT"
+  ],
+  [
+   122,
+   4,
+   1,
+   42,
+   3,
+   "INT"
+  ],
+  [
+   123,
+   44,
+   0,
+   48,
+   1,
+   "FLOAT"
+  ],
+  [
+   124,
+   4,
+   0,
+   48,
+   2,
+   "INT"
+  ],
+  [
+   125,
+   4,
+   1,
+   48,
+   3,
+   "INT"
+  ],
+  [
+   126,
+   50,
+   0,
+   54,
+   1,
+   "FLOAT"
+  ],
+  [
+   127,
+   4,
+   0,
+   54,
+   2,
+   "INT"
+  ],
+  [
+   128,
+   4,
+   1,
+   54,
+   3,
+   "INT"
+  ]
+ ],
+ "groups": [],
+ "config": {},
+ "extra": {
+  "ds": {
+   "scale": 0.6,
+   "offset": [
+    900,
+    700
+   ]
+  },
+  "frontendVersion": "1.45.20"
+ },
+ "version": 0.4
+}

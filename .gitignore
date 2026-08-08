@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# ComfyUI caches produced at runtime
+output/h3_cond_cache/
+output/h3_videos/
+
+# Asset / model folders (never commit large binaries)
+models/
+assets/
+input/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+.DS_Store
