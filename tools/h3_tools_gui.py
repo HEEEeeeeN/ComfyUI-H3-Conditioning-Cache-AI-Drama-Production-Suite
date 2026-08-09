@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""H3 分镜工具箱 - 独立桌面 GUI 工具
+"""AI剧生产套件 - 独立桌面 GUI 工具
 
 三标签页：
   Tab 1: MD → Excel（分镜头需求MD转审阅表Excel）
@@ -48,11 +48,11 @@ def _import_module(filename, modname):
 # ── GUI 应用类 ───────────────────────────────────────────────────────
 
 class H3ToolsApp:
-    """H3 分镜工具箱主应用。"""
+    """AI剧生产套件主应用。"""
 
     def __init__(self, root):
         self.root = root
-        self.root.title("H3 分镜工具箱")
+        self.root.title("AI剧生产套件")
         self.root.geometry("1000x750")
         self.root.minsize(900, 680)
 

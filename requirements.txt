@@ -1,4 +1,4 @@
-# ComfyUI-H3-Conditioning-Cache has no additional Python dependencies beyond
+# AI剧生产套件 (AI-Drama-Production-Suite) has no additional Python dependencies beyond
 # what ComfyUI itself already ships (torch, folder_paths, comfy.*).
 #
 # Everything this plugin imports is part of the ComfyUI runtime:

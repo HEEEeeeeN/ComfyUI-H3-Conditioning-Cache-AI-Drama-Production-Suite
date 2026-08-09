@@ -261,14 +261,24 @@ def build_comfy_math(idgen, float_id, float_out, x, y):
     return nid, node, link_id
 
 
+def _extract_number(val, default):
+    """从字符串中提取首个数字，用于时长/分辨率等含单位的值（如 '11秒' → 11.0）。"""
+    if val is None:
+        return default
+    m = re.search(r"-?\d+(?:\.\d+)?", str(val))
+    if m:
+        return float(m.group(0))
+    return default
+
+
 def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset, y_offset):
     """为单个镜头创建一条链：easy promptLine → MiniMaxH3ReferenceToVideo → H3SaveConditioning。"""
     nodes = []
     links = []
 
     shot_id = shot.get("镜头编号", "unknown")
-    duration = shot.get("时长", "5")
-    resolution = shot.get("分辨率", "0.5")
+    duration = _extract_number(shot.get("时长", "5"), 5.0)
+    resolution = _extract_number(shot.get("分辨率", "0.5"), 0.5)
 
     # 获取参演资产
     char = shot.get("参演角色1", "")

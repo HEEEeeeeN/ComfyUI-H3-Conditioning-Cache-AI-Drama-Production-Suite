@@ -1,20 +1,29 @@
 <div align="center">
 
-# ComfyUI-H3-Conditioning-Cache
+# AI剧生产套件 · AI Drama Production Suite
 
-**H3 条件缓存与批量生成插件 · H3 Conditioning Cache & Batch Generation Nodes**
-
-将昂贵的一次性条件编码（Qwen3-VL-32B + 参考 VAE）固化为 `.pt` 缓存，解耦"预编码"与"生成"，用单条循环链批量产出整集视频。
-
-Persist the expensive one-time conditioning encoding (Qwen3-VL-32B + reference VAE) into `.pt` cache files, decouple the **pre-encode** and **generate** phases, and render a whole episode through a single for-loop chain.
+**面向 MiniMax H3 创作者的一站式漫剧生产工具**
+**A one-stop production suite for MiniMax H3 drama creators**
 
 </div>
 
 ---
 
+## 为什么做这套工具 / Why This Suite
+
+> **目的**：让基于 H3 的创作者，专注于**剧本的打磨**与**美术资产的准备**，而不是守着 H3 工作流磋磨人生、浪费时间。
+>
+> The goal is to let H3 creators focus on **polishing the script** and **preparing art assets** — instead of grinding through the H3 workflow, wasting time.
+
+这套工具把"从分镜头需求到成片"的整条漫剧生产链路串起来：分镜头需求 MD → 提示词审阅表 Excel → 多链生产 JSON → 批量预编码 `.pt` 缓存 → 批量生成视频。其中，最昂贵的文本/参考条件编码被固化为 `.pt` 缓存，全程只跑一次。
+
+This suite chains the whole comic-drama production path from shot requirements to finished video: shot-requirement MD → prompt-review Excel → multi-chain production JSON → batch pre-encode `.pt` cache → batch video generation. The most expensive text/reference conditioning encoding is persisted as `.pt` caches and runs only once.
+
+---
+
 ## Table of Contents
 
-- [为什么做这个插件 / Why This Plugin](#为什么做这个插件--why-this-plugin)
+- [为什么做这套工具 / Why This Suite](#为什么做这套工具--why-this-suite)
 - [核心技术思路 / Core Idea](#核心技术思路--core-idea)
 - [两阶段管线 / Two-Phase Pipeline](#两阶段管线--two-phase-pipeline)
 - [安装 / Installation](#安装--installation)
@@ -28,7 +37,7 @@ Persist the expensive one-time conditioning encoding (Qwen3-VL-32B + reference V
 
 ---
 
-## 为什么做这个插件 / Why This Plugin
+## 为什么需要条件缓存 / Why Conditioning Cache
 
 MiniMax H3 的文生视频/参考生视频在**每次采样前**都要把文本提示词推过 Qwen3-VL-32B 文本编码器，并把参考图和参考视频编码进 `minimax_refs` 潜空间。这一过程：
 
@@ -56,7 +65,7 @@ ComfyUI 自带的 LTX 条件保存/加载节点只持久化 `conditioning_data_*
 
 The stock LTXV conditioning saver/loader persists only `conditioning_data_*` and `attention_mask_*`, silently dropping `minimax_refs` — exactly the reference latents H3 needs.
 
-本插件用递归转换器把 `conditioning` 里的 NestedTensor、张量、字典、列表全部降级为可被 `torch.save` 稳定 pickled 的普通结构，写盘时自带元数据（时长、宽高、帧率、帧数）。
+本套件用递归转换器把 `conditioning` 里的 NestedTensor、张量、字典、列表全部降级为可被 `torch.save` 稳定 pickled 的普通结构，写盘时自带元数据（时长、宽高、帧率、帧数）。
 
 This plugin recursively lowers every NestedTensor, tensor, dict and list inside the conditioning into a plain structure that `torch.save` can pickled deterministically, and writes metadata (duration, dimensions, FPS, frame count) alongside.
 
@@ -102,7 +111,7 @@ Benefits: for an episode with hundreds of shots, pre-encode runs exactly once; w
 
 ### 前置：安装 MiniMax H3 核心节点
 
-本插件不含模型权重，也不含 H3 核心节点。先生成/安装 H3 官方整合包：
+本套件不含模型权重，也不含 H3 核心节点。先生成/安装 H3 官方整合包：
 
 Prerequisite: install the MiniMax H3 core nodes (this plugin ships no weights and no H3 core nodes):
 
@@ -111,11 +120,11 @@ git clone https://github.com/MiniMax-AI/MiniMax-H3-ComfyUI \
   ComfyUI/custom_nodes/MiniMax-H3-ComfyUI
 ```
 
-### 安装本插件 / Install this plugin
+### 安装本套件 / Install this suite
 
 ```bash
-git clone https://github.com/<your-org>/ComfyUI-H3-Conditioning-Cache \
-  ComfyUI/custom_nodes/ComfyUI-H3-Conditioning-Cache
+git clone https://github.com/<your-org>/AI-Drama-Production-Suite \
+  ComfyUI/custom_nodes/AI-Drama-Production-Suite
 ```
 
 或手动把仓库根目录放入 `ComfyUI/custom_nodes/`。重启 ComfyUI 后，节点会出现在 `H3Cache` 和 `H3Cache/循环` 分类下。
@@ -246,33 +255,51 @@ This repo's `tools/` directory provides a toolchain that converts shot requireme
 
 ```
 分镜头需求_第X集.md  →  shot_md_to_excel.py  →  提示词审阅表.xlsx  →  excel_to_multi_chain_json.py  →  多链生产JSON
+
+> 生成的多链 JSON 中，**每个镜头拥有独立的分辨率选择器与时长节点**，支持整集不同镜头混用 0.4/0.5 分辨率与不同时长，无需按时长分组。
 ```
 
 | 工具 | 功能 | 输入 | 输出 |
 | --- | --- | --- | --- |
-| `shot_md_to_excel.py` | 解析分镜头需求 MD，生成提示词审阅表 Excel | `.md` 文件 | `.xlsx`（Sheet1 审阅 + Sheet2 资产路径 + Sheet3 说明） |
-| `excel_to_multi_chain_json.py` | 读取审阅后的 Excel，生成多链生产 JSON | `.xlsx` 文件 | ComfyUI workflow JSON（按角色分组或按镜头分组） |
-| `h3_tools_gui.py` | 桌面 GUI 工具，批量处理 MD/Excel，管理美术资产 | 多个文件 | 批量输出 |
+| `shot_md_to_excel.py` | 解析分镜头需求 MD，生成提示词审阅表 Excel（含分辨率下拉 0.4/0.5、可编辑时长列） | `.md` 文件 | `.xlsx`（Sheet1 审阅 + Sheet2 资产路径 + Sheet3 说明） |
+| `excel_to_multi_chain_json.py` | 读取审阅后的 Excel，生成多链生产 JSON（每镜**独立**分辨率+时长节点） | `.xlsx` 文件 | ComfyUI workflow JSON（按角色分组或 `--by-shot` 按镜头分组） |
+| `h3_tools_gui.py` | **推荐**：桌面 GUI 工具，三标签页（MD→Excel / 资产管理 / Excel→JSON），统一批量处理 | 多个文件 | 批量输出 |
 
 **如何编写合格的分镜头需求 MD 文件？** 详见 [`docs/分镜头需求制作指南.md`](docs/分镜头需求制作指南.md)——包含完整的格式规范、H3 提示词编写规则、字段映射表、示例和 AI 助手快速参考。
 
 **How to write a compliant shot requirements MD file?** See [`docs/分镜头需求制作指南.md`](docs/分镜头需求制作指南.md) for the complete format specification, H3 prompt writing rules, field mapping tables, examples, and an AI assistant quick reference.
 
-### 快速上手 / Quick Start
+### 快速上手 / Quick Start（GUI 优先）
+
+**推荐流程**：启动桌面 GUI 工具，在三标签页间完成"MD→Excel → 资产管理 → Excel→JSON"全流程：
 
 ```bash
-# 1. 按指南编写 MD 文件
-#    参考 docs/分镜头需求制作指南.md 中的格式规范
+# 1. 启动 GUI
+python tools/h3_tools_gui.py
+```
 
-# 2. MD → Excel
-python tools/shot_md_to_excel.py 分镜头需求_第1集.md 提示词审阅表_第1集.xlsx
+1. **Tab 1（MD→Excel）**：选择分镜头需求 MD 文件，生成提示词审阅表 `.xlsx`。
+2. **Tab 2（资产管理）**：上传/填写美术资产路径（角色/场景/道具），可保存为映射 JSON。
+3. **Tab 3（Excel→JSON）**：读取审阅后的 Excel（结合资产映射），生成多链生产 JSON。
 
-# 3. 在 Excel 中审阅：修改提示词、选择分辨率(0.4/0.5)、确认时长、填写资产路径
+**审阅环节**（手动，在 Excel 中完成）：
+- 审阅每镜提示词，必要时在"修改指令"列填写修改意见。
+- 分辨率列下拉选择 `0.4`（经济）或 `0.5`（高清）；每镜可独立设置。
+- 时长列直接编辑数值（支持 `11秒` 这类带单位写法，脚本自动解析）。
+- 在 Sheet2 填写/核对各资产在 ComfyUI `input/` 目录下的相对路径。
 
-# 4. Excel → JSON
-python tools/excel_to_multi_chain_json.py 提示词审阅表_第1集.xlsx output/json/
+---
 
-# 5. 将 JSON 导入 ComfyUI，运行预编码 → 生成视频
+### 命令行方式 / CLI Alternative
+
+```bash
+# 1. MD → Excel（单文件需用 -o 指定输出）
+python tools/shot_md_to_excel.py 分镜头需求_第1集.md -o 提示词审阅表_第1集.xlsx
+
+# 2. Excel → JSON（-m 加载资产映射补充路径；--by-shot 按镜头分组）
+python tools/excel_to_multi_chain_json.py 提示词审阅表_第1集.xlsx -o output/json/ -m assets_mapping.json --by-shot
+
+# 3. 将 JSON 导入 ComfyUI，运行预编码 → 生成视频
 ```
 
 ---
@@ -306,6 +333,6 @@ See [`models.md`](models.md) for the Qwen3-VL-32B H3 text encoder, H3 ref2va UNe
 
 ## 许可 / License
 
-[MIT](LICENSE). 本插件代码可自由使用；引用的 MiniMax H3 模型与整合包遵循其各自许可。
+[MIT](LICENSE). 本套件代码可自由使用；引用的 MiniMax H3 模型与整合包遵循其各自许可。
 
 [MIT](LICENSE). The plugin code is freely usable; the referenced MiniMax H3 models and integration follow their own licenses.
