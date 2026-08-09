@@ -123,8 +123,8 @@ git clone https://github.com/MiniMax-AI/MiniMax-H3-ComfyUI \
 ### 安装本套件 / Install this suite
 
 ```bash
-git clone https://github.com/<your-org>/AI-Drama-Production-Suite \
-  ComfyUI/custom_nodes/AI-Drama-Production-Suite
+git clone https://github.com/<your-org>/ComfyUI-H3-Conditioning-Cache-AI-Drama-Production-Suite \
+  ComfyUI/custom_nodes/ComfyUI-H3-Conditioning-Cache-AI-Drama-Production-Suite
 ```
 
 或手动把仓库根目录放入 `ComfyUI/custom_nodes/`。重启 ComfyUI 后，节点会出现在 `H3Cache` 和 `H3Cache/循环` 分类下。
