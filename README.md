@@ -11,13 +11,49 @@
 
 ## 为什么做这套工具 / Why This Suite
 
-> **目的**：让基于 H3 的创作者，专注于**剧本的打磨**与**美术资产的准备**，而不是守着 H3 工作流磋磨人生、浪费时间。
+**先夸一夸 H3。** MiniMax H3 是当前漫剧 / 短剧生成里第一梯队的模型：给它一张参考图、一段提示词，它就能把角色、场景、对白、环境声串成一条连贯的成片镜头，质量让人眼前一亮。
+
+**但用官方工作流做一整部漫剧，是一场折磨。** 因为 H3 官流要求你：
+
+- **守在机器前**：一镜一镜地喂提示词、等采样、看结果，人不能走开；
+- **抽卡式生成**：同样的提示词，换一个种子结果就天差地别，不满意就得反复重抽；
+- **重复烧钱**：每改一版，都要把提示词重新推过 32B 文本编码器，昂贵且浪费；
+- **人不离机**：一个人被钉在工作流前面，效率低，身心俱疲。
+
+**现实拍片不是这么干的。** 剧组会一次性拍出一大堆镜头素材，再进剪辑台，挑合适的、拼成片。漫剧生产本该如此：**先生成一堆候选镜头，再挑选、剪辑**，而不是一镜一镜守着机器熬。
+
+**为了把"生产"从"创作"里剥离出来，我们做了这套工具。** 你只需要提供**剧本**和**美术资产**，剩下的交给工具链：审查一次提示词后全自动，最贵的条件编码固化为 `.pt` 缓存、全程只跑一次，`.pt` 还能**批量提交给云算力**跑复数种子 / 高分辨率 / 长时长，一次产出一大批候选镜头；你回到剪辑台挑合适的，把省下的时间拿去**打磨剧本和美术**。
+
+> **一句话**：H3 负责"拍"，这套工具负责"让拍片不折磨人"——生产端剥离，创作端归你。
 >
-> The goal is to let H3 creators focus on **polishing the script** and **preparing art assets** — instead of grinding through the H3 workflow, wasting time.
+> **TL;DR**: H3 does the "shooting"; this suite makes shooting not soul-crushing — production is decoupled, creation stays with you.
 
-这套工具把"从分镜头需求到成片"的整条漫剧生产链路串起来：分镜头需求 MD → 提示词审阅表 Excel → 多链生产 JSON → 批量预编码 `.pt` 缓存 → 批量生成视频。其中，最昂贵的文本/参考条件编码被固化为 `.pt` 缓存，全程只跑一次。
+### 官方工作流 vs 本套件
 
-This suite chains the whole comic-drama production path from shot requirements to finished video: shot-requirement MD → prompt-review Excel → multi-chain production JSON → batch pre-encode `.pt` cache → batch video generation. The most expensive text/reference conditioning encoding is persisted as `.pt` caches and runs only once.
+```mermaid
+flowchart LR
+    subgraph OFF["官方工作流 · 守在机器前"]
+        direction LR
+        A1["手动搭 H3 工作流"] --> A2["守着等生成"] --> A3["抽卡 · 不满意重抽"] --> A4["人不离机"] --> A5["效率低 · 折磨人"]
+    end
+
+    subgraph SUITE["AI剧生产套件 · 生产端剥离"]
+        direction LR
+        B1["剧本 + 美术资产"] --> B2["分镜头需求 MD"] --> B3["提示词审阅表 Excel"] --> B4["审查提示词（一次）"] --> B5["多链生产 JSON"] --> B6["批量预编码 .pt 缓存"] --> B7["批量提交云算力<br/>多种子 · 高分辨率 · 长时长"] --> B8["挑合适镜头 · 剪辑成片"]
+    end
+```
+
+| 维度 | 官方工作流 | 本套件 |
+| --- | --- | --- |
+| 人在不在机前 | 必须守着，人不离机 | 审查一次提示词后全自动 |
+| 生成方式 | 单镜抽卡，反复重抽 | 批量预编码 `.pt`，一次成批 |
+| 条件编码 | 每版重跑 32B 编码 | 固化 `.pt` 缓存，全程只跑一次 |
+| 算力 | 只能本地单机 | 可批量提交云算力，多种子 / 高分辨率 / 长时长 |
+| 创作者的时间 | 耗在等生成上 | 拿去打磨剧本与美术资产 |
+
+> 这套工具把"从分镜头需求到成片"的整条漫剧生产链路串起来：分镜头需求 MD → 提示词审阅表 Excel → 多链生产 JSON → 批量预编码 `.pt` 缓存 → 批量生成视频。其中，最昂贵的文本/参考条件编码被固化为 `.pt` 缓存，全程只跑一次。
+>
+> This suite chains the whole comic-drama production path from shot requirements to finished video: shot-requirement MD → prompt-review Excel → multi-chain production JSON → batch pre-encode `.pt` cache → batch video generation. The most expensive text/reference conditioning encoding is persisted as `.pt` caches and runs only once.
 
 ---
 
