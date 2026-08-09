@@ -21,6 +21,7 @@ Persist the expensive one-time conditioning encoding (Qwen3-VL-32B + reference V
 - [节点文档 / Node Reference](#节点文档--node-reference)
 - [示范工作流 1：多链预编码 / Demo 1: Multi-Chain Pre-Encode](#示范工作流-1多链预编码--demo-1-multi-chain-pre-encode)
 - [示范工作流 2：批量生成 / Demo 2: Batch Generation](#示范工作流-2批量生成--demo-2-batch-generation)
+- [分镜头需求制作指南 / Shot Requirements Guide](#分镜头需求制作指南--shot-requirements-guide)
 - [硬件要求 / Hardware Requirements](#硬件要求--hardware-requirements)
 - [模型清单 / Models](#模型清单--models)
 - [许可 / License](#许可--license)
@@ -234,6 +235,45 @@ easy promptLine ──► MiniMaxH3ReferenceToVideo ──► H3SaveConditioning
 - **Metadata-driven**: `H3ReadConditioningMeta` feeds each shot's duration/width/height/frame count into `EmptyMiniMaxH3LatentAV`, so one loop can mix shots of different durations without grouping by duration.
 - **Save by shot name**: `H3ShotNameByIndex` builds `h3_videos/<shot>` and `H3SaveVideo` writes a preview-less MP4.
 - Model & VAE loaders sit outside the loop and load once; the body is a single "fetch → sample → decode → save → free" chain.
+
+---
+
+## 分镜头需求制作指南 / Shot Requirements Guide
+
+本仓库的 `tools/` 目录提供一套从分镜头需求到 ComfyUI 生产 JSON 的工具链：
+
+This repo's `tools/` directory provides a toolchain that converts shot requirement documents into ComfyUI production JSON:
+
+```
+分镜头需求_第X集.md  →  shot_md_to_excel.py  →  提示词审阅表.xlsx  →  excel_to_multi_chain_json.py  →  多链生产JSON
+```
+
+| 工具 | 功能 | 输入 | 输出 |
+| --- | --- | --- | --- |
+| `shot_md_to_excel.py` | 解析分镜头需求 MD，生成提示词审阅表 Excel | `.md` 文件 | `.xlsx`（Sheet1 审阅 + Sheet2 资产路径 + Sheet3 说明） |
+| `excel_to_multi_chain_json.py` | 读取审阅后的 Excel，生成多链生产 JSON | `.xlsx` 文件 | ComfyUI workflow JSON（按角色分组或按镜头分组） |
+| `h3_tools_gui.py` | 桌面 GUI 工具，批量处理 MD/Excel，管理美术资产 | 多个文件 | 批量输出 |
+
+**如何编写合格的分镜头需求 MD 文件？** 详见 [`docs/分镜头需求制作指南.md`](docs/分镜头需求制作指南.md)——包含完整的格式规范、H3 提示词编写规则、字段映射表、示例和 AI 助手快速参考。
+
+**How to write a compliant shot requirements MD file?** See [`docs/分镜头需求制作指南.md`](docs/分镜头需求制作指南.md) for the complete format specification, H3 prompt writing rules, field mapping tables, examples, and an AI assistant quick reference.
+
+### 快速上手 / Quick Start
+
+```bash
+# 1. 按指南编写 MD 文件
+#    参考 docs/分镜头需求制作指南.md 中的格式规范
+
+# 2. MD → Excel
+python tools/shot_md_to_excel.py 分镜头需求_第1集.md 提示词审阅表_第1集.xlsx
+
+# 3. 在 Excel 中审阅：修改提示词、选择分辨率(0.4/0.5)、确认时长、填写资产路径
+
+# 4. Excel → JSON
+python tools/excel_to_multi_chain_json.py 提示词审阅表_第1集.xlsx output/json/
+
+# 5. 将 JSON 导入 ComfyUI，运行预编码 → 生成视频
+```
 
 ---
 
