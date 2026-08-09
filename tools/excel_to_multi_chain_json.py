@@ -605,32 +605,25 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
     return output_path, len(group_shots), len(load_nodes)
 
 
-# ── 主入口 ───────────────────────────────────────────────────────────
+# ── 单文件 / 批量处理 ───────────────────────────────────────────────
 
-def main():
-    parser = argparse.ArgumentParser(description="提示词审阅表 → 多链生产 JSON")
-    parser.add_argument("xlsx", help="审阅表 Excel 路径")
-    parser.add_argument("output_dir", help="输出目录")
-    parser.add_argument("--by-shot", action="store_true",
-                        help="按镜头顺序分组（每镜一个JSON）")
-    args = parser.parse_args()
+def process_single(xlsx_path, output_dir, by_shot=False, log=print):
+    """处理单个 Excel 文件，返回 (n_groups, n_shots) 或 None。"""
+    if not Path(xlsx_path).exists():
+        log(f"ERROR: file not found: {xlsx_path}")
+        return None
 
-    if not Path(args.xlsx).exists():
-        print(f"ERROR: file not found: {args.xlsx}")
-        sys.exit(1)
-
-    os.makedirs(args.output_dir, exist_ok=True)
-
-    shots, asset_paths = read_excel(args.xlsx)
+    os.makedirs(output_dir, exist_ok=True)
+    shots, asset_paths = read_excel(xlsx_path)
 
     if not shots:
-        print("ERROR: no shots in Excel")
-        sys.exit(1)
+        log(f"ERROR: no shots in {xlsx_path}")
+        return None
 
-    print(f"读取: {len(shots)} 镜, {len(asset_paths)} 个资产路径")
+    log(f"  读取: {len(shots)} 镜, {len(asset_paths)} 个资产路径")
 
     # 分组
-    if args.by_shot:
+    if by_shot:
         groups = {}
         for shot in shots:
             sid = shot.get("镜头编号", "unknown")
@@ -643,10 +636,53 @@ def main():
                 char = "(纯场景)"
             groups.setdefault(char, []).append(shot)
 
-    print(f"分组: {len(groups)} 组")
+    log(f"  分组: {len(groups)} 组")
     for name, group in groups.items():
-        path, n_shots, n_loads = generate_group_json(name, group, asset_paths, args.output_dir)
-        print(f"  {name}: {n_shots}镜, {n_loads}个Load → {path}")
+        path, n_shots, n_loads = generate_group_json(name, group, asset_paths, output_dir)
+        log(f"    {name}: {n_shots}镜, {n_loads}个Load -> {os.path.basename(path)}")
+
+    return len(groups), len(shots)
+
+
+def process_batch(xlsx_files, output_dir, by_shot=False, log=print):
+    """批量处理多个 Excel 文件。每个 Excel 生成到 output_dir 下的子目录。"""
+    success, fail = 0, 0
+
+    for xlsx_path in xlsx_files:
+        stem = Path(xlsx_path).stem
+        sub_dir = os.path.join(output_dir, stem)
+        log(f"\n[{success + fail + 1}/{len(xlsx_files)}] {Path(xlsx_path).name}")
+
+        result = process_single(xlsx_path, sub_dir, by_shot=by_shot, log=log)
+        if result:
+            success += 1
+        else:
+            fail += 1
+
+    log(f"\n批量完成: {success} 成功, {fail} 失败, 共 {len(xlsx_files)} 文件")
+    return success, fail
+
+
+# ── 主入口 ───────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(description="提示词审阅表 → 多链生产 JSON")
+    parser.add_argument("files", nargs="+", help="Excel 文件路径（一个或多个）")
+    parser.add_argument("-o", "--output", required=True, help="输出目录")
+    parser.add_argument("--by-shot", action="store_true",
+                        help="按镜头顺序分组（每镜一个JSON）")
+    args = parser.parse_args()
+
+    xlsx_files = args.files
+
+    if len(xlsx_files) == 1:
+        # 单文件模式：直接输出到 output 目录
+        result = process_single(xlsx_files[0], args.output, by_shot=args.by_shot)
+        if result is None:
+            sys.exit(1)
+    else:
+        # 批量模式：每个 Excel 输出到子目录
+        process_batch(xlsx_files, args.output, by_shot=args.by_shot)
 
 
 if __name__ == "__main__":

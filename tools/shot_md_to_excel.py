@@ -8,7 +8,8 @@ shot_md_to_excel.py
 生成包含提示词审阅和美术资产路径映射的 Excel 表格。
 
 用法:
-    python shot_md_to_excel.py <input.md> <output.xlsx>
+  单文件:  python shot_md_to_excel.py <input.md> <output.xlsx>
+  批量:    python shot_md_to_excel.py -o <输出目录> <file1.md> [file2.md ...]
 
 Excel 结构:
   Sheet1 "提示词审阅" — 按镜头序号分行，列含场景/镜头调度/约束条件/镜头风格/
@@ -18,6 +19,8 @@ Excel 结构:
 
 import re
 import sys
+import os
+import argparse
 from pathlib import Path
 
 try:
@@ -34,7 +37,6 @@ def parse_md(md_path):
     """解析分镜头需求 MD 文件，返回 (global_info, shots)。"""
     text = Path(md_path).read_text(encoding="utf-8")
 
-    # 全局信息
     global_info = {}
     g_match = re.search(r"## 全局信息\s*\n(.*?)(?=## 镜头列表)", text, re.DOTALL)
     if g_match:
@@ -43,7 +45,6 @@ def parse_md(md_path):
             if m:
                 global_info[m.group(1)] = m.group(2).strip()
 
-    # 逐镜头解析
     shots = []
     parts = re.split(r"^### ", text, flags=re.MULTILINE)
     for part in parts:
@@ -56,7 +57,6 @@ def parse_md(md_path):
             continue
 
         shot = {"id": shot_id}
-
         for line in lines[1:]:
             line = line.strip()
             m = re.match(r"-\s*\*\*(.+?)\*\*:\s*(.*)", line)
@@ -64,7 +64,6 @@ def parse_md(md_path):
                 key, val = m.group(1), m.group(2).strip()
                 shot[key] = val
 
-        # 提取完整 H3 提示词
         prompt_match = re.search(
             r"#### 完整 H3 提示词\s*\n(.*?)(?=#### |^---|\Z)", part, re.DOTALL
         )
@@ -113,6 +112,7 @@ def _col_letter(col_idx):
 
 
 def generate_excel(global_info, shots, output_path):
+    """生成 Excel 审阅表。返回 (n_shots, n_assets) 元组。"""
     wb = Workbook()
 
     # ── Sheet1: 提示词审阅 ──
@@ -160,11 +160,8 @@ def generate_excel(global_info, shots, output_path):
 
     col_widths = {
         1: 10, 2: 8, 3: 30, 4: 30, 5: 25, 6: 20,
-        7: 60,
-        8: 12, 9: 12, 10: 12,
-        11: 15, 12: 15,
-        13: 12, 14: 12, 15: 12,
-        16: 30,
+        7: 60, 8: 12, 9: 12, 10: 12,
+        11: 15, 12: 15, 13: 12, 14: 12, 15: 12, 16: 30,
     }
     for col, width in col_widths.items():
         ws1.column_dimensions[_col_letter(col)].width = width
@@ -172,7 +169,6 @@ def generate_excel(global_info, shots, output_path):
 
     # ── Sheet2: 美术资产路径 ──
     ws2 = wb.create_sheet("美术资产路径")
-
     for col, header in enumerate(SHEET2_HEADERS, 1):
         cell = ws2.cell(row=1, column=col, value=header)
         cell.font = HEADER_FONT
@@ -228,36 +224,79 @@ def generate_excel(global_info, shots, output_path):
     ws3.column_dimensions["A"].width = 80
 
     wb.save(output_path)
-    print(f"OK: {output_path}")
-    print(f"  Sheet1: {len(shots)} shots, {len(SHEET1_HEADERS)} cols")
-    print(f"  Sheet2: {len(sorted_assets)} assets")
+    return len(shots), len(sorted_assets)
+
+
+def process_single(md_path, output_path, log=print):
+    """处理单个 MD 文件，返回 True/False。"""
+    if not Path(md_path).exists():
+        log(f"ERROR: file not found: {md_path}")
+        return False
+
+    global_info, shots = parse_md(md_path)
+    if not shots:
+        log(f"ERROR: no shots parsed from {md_path}, check MD format")
+        return False
+
+    log(f"  解析: {len(shots)} shots")
+    if global_info:
+        log(f"  画幅: {global_info.get('画幅', '?')}, "
+            f"总时长: {global_info.get('总时长', '?')}, "
+            f"模式: {global_info.get('提示词模式', '?')}")
+
+    n_shots, n_assets = generate_excel(global_info, shots, output_path)
+    log(f"  生成: {output_path} ({n_shots} shots, {n_assets} assets)")
+    return True
+
+
+def process_batch(md_files, output_dir, log=print):
+    """批量处理多个 MD 文件。每个 MD 生成同名 .xlsx 到 output_dir。"""
+    os.makedirs(output_dir, exist_ok=True)
+    success, fail = 0, 0
+
+    for md_path in md_files:
+        stem = Path(md_path).stem
+        out_name = stem.replace("分镜头需求", "提示词审阅表") + ".xlsx"
+        out_path = os.path.join(output_dir, out_name)
+        log(f"\n[{success + fail + 1}/{len(md_files)}] {Path(md_path).name}")
+
+        if process_single(md_path, out_path, log=log):
+            success += 1
+        else:
+            fail += 1
+
+    log(f"\n批量完成: {success} 成功, {fail} 失败, 共 {len(md_files)} 文件")
+    return success, fail
 
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage: python shot_md_to_excel.py <input.md> <output.xlsx>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="分镜头需求 MD → 提示词审阅表 Excel"
+    )
+    parser.add_argument("files", nargs="+", help="MD 文件路径（一个或多个）")
+    parser.add_argument("-o", "--output", help="输出目录（批量模式）或输出文件路径（单文件模式）")
+    args = parser.parse_args()
 
-    md_path = sys.argv[1]
-    output_path = sys.argv[2]
+    md_files = args.files
 
-    if not Path(md_path).exists():
-        print(f"ERROR: file not found: {md_path}")
-        sys.exit(1)
+    # 单文件模式: python shot_md_to_excel.py input.md output.xlsx
+    if len(md_files) == 1 and args.output and not os.path.isdir(args.output):
+        if not args.output.endswith("/"):
+            process_single(md_files[0], args.output)
+            return
+        # output 是目录，走批量
+        output_dir = args.output
+    elif len(md_files) == 1 and not args.output:
+        # 没有指定输出，同名 .xlsx
+        stem = Path(md_files[0]).stem
+        out_name = stem.replace("分镜头需求", "提示词审阅表") + ".xlsx"
+        process_single(md_files[0], out_name)
+        return
+    else:
+        # 批量模式
+        output_dir = args.output or os.path.dirname(md_files[0]) or "."
 
-    global_info, shots = parse_md(md_path)
-
-    if not shots:
-        print("ERROR: no shots parsed, check MD format")
-        sys.exit(1)
-
-    print(f"Parsed: {len(shots)} shots")
-    if global_info:
-        print(f"  aspect: {global_info.get('画幅', '?')}")
-        print(f"  total: {global_info.get('总时长', '?')}")
-        print(f"  mode: {global_info.get('提示词模式', '?')}")
-
-    generate_excel(global_info, shots, output_path)
+    process_batch(md_files, output_dir)
 
 
 if __name__ == "__main__":
