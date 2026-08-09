@@ -26,6 +26,7 @@ from pathlib import Path
 try:
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.worksheet.datavalidation import DataValidation
 except ImportError:
     print("ERROR: openpyxl not found. Install with: pip install openpyxl")
     sys.exit(1)
@@ -88,7 +89,7 @@ THIN_BORDER = Border(
 )
 
 SHEET1_HEADERS = [
-    "镜头编号", "时长", "场景", "镜头调度", "约束条件", "镜头风格",
+    "镜头编号", "时长", "分辨率", "场景", "镜头调度", "约束条件", "镜头风格",
     "完整提示词",
     "参演角色1", "参演角色2", "参演角色3",
     "场景设置1", "场景设置2",
@@ -137,6 +138,7 @@ def generate_excel(global_info, shots, output_path):
         row_data = [
             shot["id"],
             shot.get("时长", ""),
+            shot.get("分辨率", "0.5"),
             shot.get("场景 / Scene", shot.get("场景", "")),
             shot.get("镜头调度 / Camera", shot.get("镜头调度", "")),
             shot.get("约束条件 / Constraints", shot.get("约束条件", "")),
@@ -159,13 +161,23 @@ def generate_excel(global_info, shots, output_path):
             cell.alignment = Alignment(vertical="top", wrap_text=True)
 
     col_widths = {
-        1: 10, 2: 8, 3: 30, 4: 30, 5: 25, 6: 20,
-        7: 60, 8: 12, 9: 12, 10: 12,
-        11: 15, 12: 15, 13: 12, 14: 12, 15: 12, 16: 30,
+        1: 10, 2: 8, 3: 10, 4: 30, 5: 30, 6: 25, 7: 20,
+        8: 60, 9: 12, 10: 12, 11: 12,
+        12: 15, 13: 15, 14: 12, 15: 12, 16: 12, 17: 30,
     }
     for col, width in col_widths.items():
         ws1.column_dimensions[_col_letter(col)].width = width
     ws1.freeze_panes = "A2"
+
+    # 分辨率列下拉验证 (C列, 0.4 / 0.5)
+    res_dv = DataValidation(type="list", formula1='"0.4,0.5"', allow_blank=False)
+    res_dv.error = "请选择 0.4 或 0.5"
+    res_dv.errorTitle = "无效分辨率"
+    res_dv.prompt = "H3分辨率系数: 0.5=高清, 0.4=经济"
+    res_dv.promptTitle = "分辨率选择"
+    ws1.add_data_validation(res_dv)
+    for row_idx in range(2, len(shots) + 2):
+        res_dv.add(ws1.cell(row=row_idx, column=3))
 
     # ── Sheet2: 美术资产路径 ──
     ws2 = wb.create_sheet("美术资产路径")
@@ -205,6 +217,8 @@ def generate_excel(global_info, shots, output_path):
         "",
         "1. Sheet1「提示词审阅」",
         "   - 每行一镜，从分镜头需求 MD 自动提取",
+        "   - 时长 列可审阅修改（单位: 秒，直接编辑数值）",
+        "   - 分辨率 列下拉选择 0.4 或 0.5（对应 H3 节点分辨率系数，0.5=高清, 0.4=经济）",
         "   - 场景/镜头调度/约束条件/镜头风格 列从 H3 提示词要素提取",
         "   - 完整提示词 列为 H3 三核心字段原文",
         "   - 参演角色1-3 / 场景设置1-2 / 参演道具1-3 从美术资产需求提取",
@@ -225,6 +239,46 @@ def generate_excel(global_info, shots, output_path):
 
     wb.save(output_path)
     return len(shots), len(sorted_assets)
+
+
+def collect_assets_from_md(md_path):
+    """从单个 MD 文件收集资产清单，返回 dict: {type: set(names)}。
+    type 为 "角色"/"场景"/"道具"。
+    """
+    _, shots = parse_md(md_path)
+    assets = {"角色": set(), "场景": set(), "道具": set()}
+    for shot in shots:
+        for c in _split_assets(shot.get("参演角色", "")):
+            assets["角色"].add(c)
+        for s in _split_assets(shot.get("场景参考", "")):
+            assets["场景"].add(s)
+        for p in _split_assets(shot.get("道具参考", "")):
+            assets["道具"].add(p)
+    return assets
+
+
+def collect_assets_batch(md_files):
+    """从多个 MD 文件收集全局资产清单。
+    返回 dict: {"global": {type: set}, "episodes": {stem: {type: set}}}
+    """
+    global_assets = {"角色": set(), "场景": set(), "道具": set()}
+    episodes = {}
+    for md_path in md_files:
+        stem = Path(md_path).stem
+        ep_assets = collect_assets_from_md(md_path)
+        episodes[stem] = ep_assets
+        for t in global_assets:
+            global_assets[t] |= ep_assets[t]
+    return {"global": global_assets, "episodes": episodes}
+
+
+def save_asset_mapping(mapping, output_path):
+    """将资产映射保存为 JSON 文件。
+    mapping 格式: {"角色": {"黑猫": "path/to.png", ...}, "场景": {...}, "道具": {...}}
+    """
+    import json
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(mapping, f, ensure_ascii=False, indent=2)
 
 
 def process_single(md_path, output_path, log=print):

@@ -205,24 +205,10 @@ def build_shared_nodes(idgen):
         color="#322", bgcolor="#533",
     ))
 
-    # ResolutionSelector
-    res_id = idgen.node()
-    nodes.append(make_node(
-        res_id, "ResolutionSelector", "Resolution 16:9",
-        [-1800, -100], [300, 82],
-        widgets_values=["16:9 (Widescreen)", 0.9, 32],
-        outputs=[
-            make_output("width", "INT", links=[], slot=0),
-            make_output("height", "INT", links=[], slot=1),
-        ],
-        color="#322", bgcolor="#533",
-    ))
-
     refs = {
         "clip_id": clip_id, "clip_out": 0,
         "vae_v_id": vae_v_id, "vae_v_out": 0,
         "vae_a_id": vae_a_id, "vae_a_out": 0,
-        "res_id": res_id, "res_w_out": 0, "res_h_out": 1,
     }
     return nodes, refs
 
@@ -282,6 +268,7 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
 
     shot_id = shot.get("镜头编号", "unknown")
     duration = shot.get("时长", "5")
+    resolution = shot.get("分辨率", "0.5")
 
     # 获取参演资产
     char = shot.get("参演角色1", "")
@@ -292,6 +279,49 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
         sc = shot.get(f"参演角色{i}", "")
         if sc:
             sup_chars.append(sc)
+
+    # ── Per-shot ResolutionSelector ──
+    res_id = idgen.node()
+    res_node = make_node(
+        res_id, "ResolutionSelector", f"Resolution ({shot_id}, {resolution})",
+        [x_offset - 600, y_offset - 100], [300, 82],
+        widgets_values=["16:9 (Widescreen)", float(resolution), 32],
+        outputs=[
+            make_output("width", "INT", links=[], slot=0),
+            make_output("height", "INT", links=[], slot=1),
+        ],
+        color="#322", bgcolor="#533",
+    )
+    nodes.append(res_node)
+
+    # ── Per-shot PrimitiveFloat (duration) ──
+    dur_id = idgen.node()
+    dur_node = make_node(
+        dur_id, "PrimitiveFloat", f"Duration ({shot_id}, {duration}s)",
+        [x_offset - 600, y_offset], [300, 82],
+        widgets_values=[float(duration)],
+        outputs=[make_output("FLOAT", "FLOAT", links=[], slot=0)],
+        color="#322", bgcolor="#533",
+    )
+    nodes.append(dur_node)
+
+    # ── Per-shot ComfyMathExpression (frame count) ──
+    math_id = idgen.node()
+    math_link_id = idgen.link()
+    math_node = make_node(
+        math_id, "ComfyMathExpression", f"Frame Count ({shot_id})",
+        [x_offset - 600, y_offset + 100], [300, 82],
+        inputs=[make_input("values.a", "FLOAT", link=math_link_id)],
+        widgets_values=["max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17"],
+        outputs=[
+            make_output("FLOAT", "FLOAT", links=[], slot=0),
+            make_output("INT", "INT", links=[], slot=1),
+            make_output("BOOL", "BOOL", links=[], slot=2),
+        ],
+        color="#322", bgcolor="#533",
+    )
+    nodes.append(math_node)
+    links.append([math_link_id, dur_id, 0, math_id, 0, "FLOAT"])
 
     # ── easy promptLine ──
     pl_id = idgen.node()
@@ -380,27 +410,20 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     links.append([vae_lid, shared_refs["vae_v_id"], shared_refs["vae_v_out"],
                   r2v_id, 1, "VAE"])
 
-    # width 连接
+    # width 连接 (per-shot ResolutionSelector)
     w_lid = idgen.link()
     r2v_inputs.append(make_input("width", "INT", link=w_lid, widget_name="width"))
-    links.append([w_lid, shared_refs["res_id"], shared_refs["res_w_out"],
-                  r2v_id, 1, "INT"])
+    links.append([w_lid, res_id, 0, r2v_id, 1, "INT"])
 
-    # height 连接
+    # height 连接 (per-shot ResolutionSelector)
     h_lid = idgen.link()
     r2v_inputs.append(make_input("height", "INT", link=h_lid, widget_name="height"))
-    links.append([h_lid, shared_refs["res_id"], shared_refs["res_h_out"],
-                  r2v_id, 2, "INT"])
+    links.append([h_lid, res_id, 1, r2v_id, 2, "INT"])
 
     # prompt 连接
     prompt_lid = idgen.link()
     r2v_inputs.append(make_input("prompt", "STRING", link=prompt_lid))
     links.append([prompt_lid, pl_id, 0, r2v_id, 2, "STRING"])
-
-    # duration 连接
-    dur_node = load_nodes.get(("dur", shot_id))
-    if dur_node is None:
-        dur_node = load_nodes.get(("dur", "shared"))
 
     r2v_outputs = [
         make_output("positive", "CONDITIONING", links=[], slot=0),
@@ -427,17 +450,15 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     links.append([save_vae_lid, shared_refs["vae_v_id"], shared_refs["vae_v_out"],
                   save_id, 1, "VAE"])
 
-    # duration 连接
+    # duration 连接 (per-shot PrimitiveFloat)
     save_dur_lid = idgen.link()
-    links.append([save_dur_lid, dur_node, 0, save_id, 2, "FLOAT"])
+    links.append([save_dur_lid, dur_id, 0, save_id, 2, "FLOAT"])
 
-    # width/height 连接
+    # width/height 连接 (per-shot ResolutionSelector)
     save_w_lid = idgen.link()
-    links.append([save_w_lid, shared_refs["res_id"], shared_refs["res_w_out"],
-                  save_id, 3, "INT"])
+    links.append([save_w_lid, res_id, 0, save_id, 3, "INT"])
     save_h_lid = idgen.link()
-    links.append([save_h_lid, shared_refs["res_id"], shared_refs["res_h_out"],
-                  save_id, 4, "INT"])
+    links.append([save_h_lid, res_id, 1, save_id, 4, "INT"])
 
     save_node = make_node(
         save_id, "H3SaveConditioning", f"Save ({shot_id}.pt)",
@@ -467,15 +488,6 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
     # 共享节点
     shared_nodes, shared_refs = build_shared_nodes(idgen)
     all_nodes.extend(shared_nodes)
-
-    # 共享 PrimitiveFloat + ComfyMathExpression（时长）
-    # 取第一镜的时长作为默认值
-    first_dur = group_shots[0].get("时长", "5")
-    float_id, float_node = build_primitive_float(idgen, first_dur, -1800, 360)
-    all_nodes.append(float_node)
-    math_id, math_node, math_link = build_comfy_math(idgen, float_id, 0, -1500, 360)
-    all_nodes.append(math_node)
-    all_links.append([math_link, float_id, 0, math_id, 0, "FLOAT"])
 
     # ── 合并 LoadImage ──
     # 收集本组所有用到的资产，去重
@@ -530,9 +542,6 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
                 all_nodes.append(node)
                 load_nodes[("char", cname)] = nid
                 load_y += 100
-
-    # 共享时长节点
-    load_nodes[("dur", "shared")] = float_id
 
     # ── 逐镜创建链 ──
     for i, shot in enumerate(group_shots):
@@ -593,7 +602,7 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
         "extra": {
             "ds": {"scale": 0.6, "offset": [800, 400]},
             "note": f"H3 多链预编码 | {group_name} | {len(group_shots)}镜 | 共享Load合并 | "
-                    f"duration={first_dur}s | 元数据连接",
+                    f"每镜独立分辨率+时长 | 元数据连接",
         },
         "version": 0.4,
     }
@@ -605,22 +614,59 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
     return output_path, len(group_shots), len(load_nodes)
 
 
+# ── 资产映射 ─────────────────────────────────────────────────────────
+
+def load_asset_mapping(mapping_path):
+    """从 JSON 文件加载资产映射，返回 {(type, name): path} dict。
+    JSON 格式: {"角色": {"黑猫": "path.png", ...}, "场景": {...}, "道具": {...}}
+    """
+    if not os.path.exists(mapping_path):
+        return {}
+    with open(mapping_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    mapping = {}
+    for asset_type, items in data.items():
+        if isinstance(items, dict):
+            for name, path in items.items():
+                if path:
+                    mapping[(asset_type, name)] = path
+    return mapping
+
+
+def merge_asset_paths(excel_paths, mapping_paths):
+    """合并 Excel Sheet2 路径和外部映射路径。
+    Excel Sheet2 优先，映射补充空缺。
+    """
+    merged = dict(mapping_paths)
+    merged.update(excel_paths)
+    return merged
+
+
 # ── 单文件 / 批量处理 ───────────────────────────────────────────────
 
-def process_single(xlsx_path, output_dir, by_shot=False, log=print):
-    """处理单个 Excel 文件，返回 (n_groups, n_shots) 或 None。"""
+def process_single(xlsx_path, output_dir, by_shot=False, log=print,
+                   asset_mapping=None):
+    """处理单个 Excel 文件，返回 (n_groups, n_shots) 或 None。
+    asset_mapping: 可选，{(type, name): path} dict，补充 Excel Sheet2 的空缺。
+    """
     if not Path(xlsx_path).exists():
         log(f"ERROR: file not found: {xlsx_path}")
         return None
 
     os.makedirs(output_dir, exist_ok=True)
-    shots, asset_paths = read_excel(xlsx_path)
+    shots, excel_paths = read_excel(xlsx_path)
 
     if not shots:
         log(f"ERROR: no shots in {xlsx_path}")
         return None
 
-    log(f"  读取: {len(shots)} 镜, {len(asset_paths)} 个资产路径")
+    # 合并资产路径：Excel Sheet2 优先，映射补充
+    if asset_mapping:
+        asset_paths = merge_asset_paths(excel_paths, asset_mapping)
+        log(f"  读取: {len(shots)} 镜, Excel {len(excel_paths)} 路径 + 映射 {len(asset_mapping)} 路径")
+    else:
+        asset_paths = excel_paths
+        log(f"  读取: {len(shots)} 镜, {len(asset_paths)} 个资产路径")
 
     # 分组
     if by_shot:
@@ -644,7 +690,8 @@ def process_single(xlsx_path, output_dir, by_shot=False, log=print):
     return len(groups), len(shots)
 
 
-def process_batch(xlsx_files, output_dir, by_shot=False, log=print):
+def process_batch(xlsx_files, output_dir, by_shot=False, log=print,
+                  asset_mapping=None):
     """批量处理多个 Excel 文件。每个 Excel 生成到 output_dir 下的子目录。"""
     success, fail = 0, 0
 
@@ -653,7 +700,8 @@ def process_batch(xlsx_files, output_dir, by_shot=False, log=print):
         sub_dir = os.path.join(output_dir, stem)
         log(f"\n[{success + fail + 1}/{len(xlsx_files)}] {Path(xlsx_path).name}")
 
-        result = process_single(xlsx_path, sub_dir, by_shot=by_shot, log=log)
+        result = process_single(xlsx_path, sub_dir, by_shot=by_shot, log=log,
+                                asset_mapping=asset_mapping)
         if result:
             success += 1
         else:
@@ -671,18 +719,26 @@ def main():
     parser.add_argument("-o", "--output", required=True, help="输出目录")
     parser.add_argument("--by-shot", action="store_true",
                         help="按镜头顺序分组（每镜一个JSON）")
+    parser.add_argument("-m", "--mapping", help="资产映射 JSON 文件路径（补充 Excel Sheet2 空缺）")
     args = parser.parse_args()
 
     xlsx_files = args.files
+    asset_mapping = None
+    if args.mapping:
+        asset_mapping = load_asset_mapping(args.mapping)
+        if asset_mapping:
+            print(f"加载资产映射: {len(asset_mapping)} 条 from {args.mapping}")
+        else:
+            print(f"WARNING: 资产映射为空或文件不存在: {args.mapping}")
 
     if len(xlsx_files) == 1:
-        # 单文件模式：直接输出到 output 目录
-        result = process_single(xlsx_files[0], args.output, by_shot=args.by_shot)
+        result = process_single(xlsx_files[0], args.output, by_shot=args.by_shot,
+                                asset_mapping=asset_mapping)
         if result is None:
             sys.exit(1)
     else:
-        # 批量模式：每个 Excel 输出到子目录
-        process_batch(xlsx_files, args.output, by_shot=args.by_shot)
+        process_batch(xlsx_files, args.output, by_shot=args.by_shot,
+                      asset_mapping=asset_mapping)
 
 
 if __name__ == "__main__":
