@@ -229,6 +229,19 @@ def build_loadimage(idgen, asset_name, image_path, x, y):
     return nid, node
 
 
+def build_loadaudio(idgen, asset_name, audio_path, x, y):
+    """创建一个 LoadAudio 节点。"""
+    nid = idgen.node()
+    node = make_node(
+        nid, "LoadAudio", f"Load Audio ({asset_name})",
+        [x, y], [300, 82],
+        widgets_values=[audio_path],
+        outputs=[make_output("AUDIO", "AUDIO", links=[], slot=0)],
+        color="#223", bgcolor="#335",
+    )
+    return nid, node
+
+
 def build_primitive_float(idgen, duration, x, y):
     """创建 PrimitiveFloat 节点（时长）。"""
     nid = idgen.node()
@@ -396,6 +409,48 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     else:
         r2v_inputs.append(make_input("ref_image_2", "IMAGE", link=None))
 
+    # ref_video_0 (参考视频)
+    ref_video = shot.get("参考视频", "")
+    if ref_video:
+        ln = load_nodes.get(("video", ref_video))
+        if ln:
+            lid = idgen.link()
+            r2v_inputs.append(make_input("ref_videos.ref_video_0", "IMAGE", link=lid))
+            links.append([lid, ln, 0, r2v_id, 6, "IMAGE"])
+        else:
+            r2v_inputs.append(make_input("ref_videos.ref_video_0", "IMAGE", link=None))
+    else:
+        r2v_inputs.append(make_input("ref_videos.ref_video_0", "IMAGE", link=None))
+
+    # ref_video_audio_0 (参考视频音频 — 留空，用户可在 ComfyUI 手动连接)
+    r2v_inputs.append(make_input("ref_video_audios.ref_video_audio_0", "AUDIO", link=None))
+
+    # ref_audio_0 (参考音频1)
+    ref_audio1 = shot.get("参考音频1", "")
+    if ref_audio1:
+        ln = load_nodes.get(("audio", ref_audio1))
+        if ln:
+            lid = idgen.link()
+            r2v_inputs.append(make_input("ref_audios.ref_audio_0", "AUDIO", link=lid))
+            links.append([lid, ln, 0, r2v_id, 8, "AUDIO"])
+        else:
+            r2v_inputs.append(make_input("ref_audios.ref_audio_0", "AUDIO", link=None))
+    else:
+        r2v_inputs.append(make_input("ref_audios.ref_audio_0", "AUDIO", link=None))
+
+    # ref_audio_1 (参考音频2)
+    ref_audio2 = shot.get("参考音频2", "")
+    if ref_audio2:
+        ln = load_nodes.get(("audio", ref_audio2))
+        if ln:
+            lid = idgen.link()
+            r2v_inputs.append(make_input("ref_audios.ref_audio_1", "AUDIO", link=lid))
+            links.append([lid, ln, 0, r2v_id, 9, "AUDIO"])
+        else:
+            r2v_inputs.append(make_input("ref_audios.ref_audio_1", "AUDIO", link=None))
+    else:
+        r2v_inputs.append(make_input("ref_audios.ref_audio_1", "AUDIO", link=None))
+
     # ref_image_3+ (配角)
     pic_idx = 3
     for sup in sup_chars:
@@ -420,6 +475,12 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     links.append([vae_lid, shared_refs["vae_v_id"], shared_refs["vae_v_out"],
                   r2v_id, 1, "VAE"])
 
+    # Audio VAE 连接
+    audio_vae_lid = idgen.link()
+    r2v_inputs.insert(2, make_input("audio_vae", "VAE", link=audio_vae_lid))
+    links.append([audio_vae_lid, shared_refs["vae_a_id"], shared_refs["vae_a_out"],
+                  r2v_id, 2, "VAE"])
+
     # width 连接 (per-shot ResolutionSelector)
     w_lid = idgen.link()
     r2v_inputs.append(make_input("width", "INT", link=w_lid, widget_name="width"))
@@ -434,6 +495,11 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     prompt_lid = idgen.link()
     r2v_inputs.append(make_input("prompt", "STRING", link=prompt_lid))
     links.append([prompt_lid, pl_id, 0, r2v_id, 2, "STRING"])
+
+    # length 连接 (per-shot ComfyMathExpression INT output)
+    length_lid = idgen.link()
+    r2v_inputs.append(make_input("length", "INT", link=length_lid, widget_name="length"))
+    links.append([length_lid, math_id, 1, r2v_id, 12, "INT"])
 
     r2v_outputs = [
         make_output("positive", "CONDITIONING", links=[], slot=0),
@@ -553,6 +619,31 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
                 load_nodes[("char", cname)] = nid
                 load_y += 100
 
+    # 参考音频（去重）
+    seen_audios = set()
+    for shot in group_shots:
+        for ak in ["参考音频1", "参考音频2"]:
+            aname = shot.get(ak, "")
+            if aname and aname not in seen_audios:
+                seen_audios.add(aname)
+                path = asset_paths.get(("音频", aname), "")
+                nid, node = build_loadaudio(idgen, aname, path, load_x, load_y)
+                all_nodes.append(node)
+                load_nodes[("audio", aname)] = nid
+                load_y += 100
+
+    # 参考视频（去重）
+    seen_videos = set()
+    for shot in group_shots:
+        vname = shot.get("参考视频", "")
+        if vname and vname not in seen_videos:
+            seen_videos.add(vname)
+            path = asset_paths.get(("视频", vname), "")
+            nid, node = build_loadimage(idgen, vname, path, load_x, load_y)
+            all_nodes.append(node)
+            load_nodes[("video", vname)] = nid
+            load_y += 100
+
     # ── 逐镜创建链 ──
     for i, shot in enumerate(group_shots):
         x_off = -500 + (i % 4) * 700
@@ -583,9 +674,17 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
         elif node["type"] == "LoadImage":
             img_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
             node["outputs"][0]["links"] = img_links
+        elif node["type"] == "LoadAudio":
+            aud_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
+            node["outputs"][0]["links"] = aud_links
         elif node["type"] == "PrimitiveFloat":
             fl_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
             node["outputs"][0]["links"] = fl_links
+        elif node["type"] == "ComfyMathExpression":
+            math_float_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
+            math_int_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 1]
+            node["outputs"][0]["links"] = math_float_links
+            node["outputs"][1]["links"] = math_int_links
         elif node["type"] == "easy promptLine":
             pl_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
             if node["outputs"]:

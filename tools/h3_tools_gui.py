@@ -510,7 +510,7 @@ class H3ToolsApp:
         global_assets = result.get("global", {})
 
         # 合并到 asset_mapping，保留已有路径
-        for atype in ("角色", "场景", "道具"):
+        for atype in ("角色", "场景", "道具", "音频", "视频"):
             if atype not in self.asset_mapping:
                 self.asset_mapping[atype] = {}
             for name in global_assets.get(atype, set()):
@@ -529,19 +529,21 @@ class H3ToolsApp:
         n_char = len(self.asset_mapping.get("角色", {}))
         n_scene = len(self.asset_mapping.get("场景", {}))
         n_prop = len(self.asset_mapping.get("道具", {}))
-        self._log("asset", f"资产收集完成: 角色 {n_char}, 场景 {n_scene}, 道具 {n_prop}")
+        n_audio = len(self.asset_mapping.get("音频", {}))
+        n_video = len(self.asset_mapping.get("视频", {}))
+        self._log("asset", f"资产收集完成: 角色 {n_char}, 场景 {n_scene}, 道具 {n_prop}, 音频 {n_audio}, 视频 {n_video}")
         self._log("asset", "可在下方为每个资产填写 input 路径，完成后保存映射。")
 
     def _get_current_assets(self):
         """返回当前视图下的 (类型, 名称) 列表。"""
         result = []
         if self.asset_view_mode == "全局（全部集）":
-            for atype in ("角色", "场景", "道具"):
+            for atype in ("角色", "场景", "道具", "音频", "视频"):
                 for name in sorted(self.asset_mapping.get(atype, {})):
                     result.append((atype, name))
         else:
             ep = self.episode_assets.get(self.asset_view_mode, {})
-            for atype in ("角色", "场景", "道具"):
+            for atype in ("角色", "场景", "道具", "音频", "视频"):
                 for name in sorted(ep.get(atype, set())):
                     result.append((atype, name))
         return result
@@ -575,15 +577,33 @@ class H3ToolsApp:
         values = self.asset_tree.item(item, "values")
         idx, atype, name, old_path = values
 
-        filetypes = [
-            ("图片文件", "*.png *.jpg *.jpeg *.webp"),
-            ("PNG", "*.png"),
-            ("JPEG", "*.jpg *.jpeg"),
-            ("WebP", "*.webp"),
-            ("所有文件", "*.*"),
-        ]
+        if atype == "音频":
+            filetypes = [
+                ("音频文件", "*.wav *.mp3 *.flac *.ogg *.aac *.m4a"),
+                ("WAV", "*.wav"),
+                ("MP3", "*.mp3"),
+                ("所有文件", "*.*"),
+            ]
+            browse_title = f"选择 {name} 的参考音频"
+        elif atype == "视频":
+            filetypes = [
+                ("视频/图片文件", "*.mp4 *.avi *.mov *.mkv *.webm *.png *.jpg *.jpeg"),
+                ("视频", "*.mp4 *.avi *.mov *.mkv *.webm"),
+                ("图片", "*.png *.jpg *.jpeg *.webp"),
+                ("所有文件", "*.*"),
+            ]
+            browse_title = f"选择 {name} 的参考视频"
+        else:
+            filetypes = [
+                ("图片文件", "*.png *.jpg *.jpeg *.webp"),
+                ("PNG", "*.png"),
+                ("JPEG", "*.jpg *.jpeg"),
+                ("WebP", "*.webp"),
+                ("所有文件", "*.*"),
+            ]
+            browse_title = f"选择 {name} 的参考图"
         path = filedialog.askopenfilename(
-            title=f"选择 {name} 的参考图", filetypes=filetypes,
+            title=browse_title, filetypes=filetypes,
         )
         if not path:
             return
@@ -609,10 +629,11 @@ class H3ToolsApp:
         values = self.asset_tree.item(item, "values")
         idx, atype, name, old_path = values
 
+        hint = "h3_audio/bgm.wav" if atype == "音频" else "h3_video/ref.mp4" if atype == "视频" else "h3_ref/角色/黑猫.png"
         new_path = simpledialog.askstring(
             "手动编辑路径",
             f"输入 {atype}/{name} 的 input 路径:\n"
-            f"(可填 ComfyUI input 目录的相对路径，如 h3_ref/角色/黑猫.png)",
+            f"(可填 ComfyUI input 目录的相对路径，如 {hint})",
             initialvalue=old_path,
         )
         if new_path is None:
@@ -671,7 +692,7 @@ class H3ToolsApp:
             return
 
         # 合并到 asset_mapping
-        for atype in ("角色", "场景", "道具"):
+        for atype in ("角色", "场景", "道具", "音频", "视频"):
             if atype not in self.asset_mapping:
                 self.asset_mapping[atype] = {}
             loaded = data.get(atype, {})
@@ -688,16 +709,18 @@ class H3ToolsApp:
         n_char = len(self.asset_mapping.get("角色", {}))
         n_scene = len(self.asset_mapping.get("场景", {}))
         n_prop = len(self.asset_mapping.get("道具", {}))
-        total = n_char + n_scene + n_prop
+        n_audio = len(self.asset_mapping.get("音频", {}))
+        n_video = len(self.asset_mapping.get("视频", {}))
+        total = n_char + n_scene + n_prop + n_audio + n_video
 
         filled = 0
-        for atype in ("角色", "场景", "道具"):
+        for atype in ("角色", "场景", "道具", "音频", "视频"):
             for p in self.asset_mapping.get(atype, {}).values():
                 if p:
                     filled += 1
 
         self.asset_stats_label.config(
-            text=f"角色: {n_char}  场景: {n_scene}  道具: {n_prop}  已填: {filled}/{total}"
+            text=f"角色: {n_char}  场景: {n_scene}  道具: {n_prop}  音频: {n_audio}  视频: {n_video}  已填: {filled}/{total}"
         )
 
     # ── Tab 3 方法 ──

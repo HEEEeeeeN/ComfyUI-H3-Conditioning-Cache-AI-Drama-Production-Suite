@@ -94,6 +94,7 @@ SHEET1_HEADERS = [
     "参演角色1", "参演角色2", "参演角色3",
     "场景设置1", "场景设置2",
     "参演道具1", "参演道具2", "参演道具3",
+    "参考音频1", "参考音频2", "参考视频",
     "修改指令",
 ]
 
@@ -152,6 +153,9 @@ def generate_excel(global_info, shots, output_path):
             props[0] if len(props) > 0 else "",
             props[1] if len(props) > 1 else "",
             props[2] if len(props) > 2 else "",
+            shot.get("参考音频1", ""),
+            shot.get("参考音频2", ""),
+            shot.get("参考视频", ""),
             "",
         ]
 
@@ -163,7 +167,8 @@ def generate_excel(global_info, shots, output_path):
     col_widths = {
         1: 10, 2: 8, 3: 10, 4: 30, 5: 30, 6: 25, 7: 20,
         8: 60, 9: 12, 10: 12, 11: 12,
-        12: 15, 13: 15, 14: 12, 15: 12, 16: 12, 17: 30,
+        12: 15, 13: 15, 14: 12, 15: 12, 16: 12,
+        17: 15, 18: 15, 19: 15, 20: 30,
     }
     for col, width in col_widths.items():
         ws1.column_dimensions[_col_letter(col)].width = width
@@ -196,8 +201,14 @@ def generate_excel(global_info, shots, output_path):
             asset_set.add(("场景", s))
         for p in _split_assets(shot.get("道具参考", "")):
             asset_set.add(("道具", p))
+        for a in _split_assets(shot.get("参考音频1", "")):
+            asset_set.add(("音频", a))
+        for a in _split_assets(shot.get("参考音频2", "")):
+            asset_set.add(("音频", a))
+        for v in _split_assets(shot.get("参考视频", "")):
+            asset_set.add(("视频", v))
 
-    type_order = {"角色": 0, "场景": 1, "道具": 2}
+    type_order = {"角色": 0, "场景": 1, "道具": 2, "音频": 3, "视频": 4}
     sorted_assets = sorted(asset_set, key=lambda x: (type_order.get(x[0], 9), x[1]))
 
     for row_idx, (asset_type, asset_name) in enumerate(sorted_assets, 2):
@@ -222,10 +233,11 @@ def generate_excel(global_info, shots, output_path):
         "   - 场景/镜头调度/约束条件/镜头风格 列从 H3 提示词要素提取",
         "   - 完整提示词 列为 H3 三核心字段原文",
         "   - 参演角色1-3 / 场景设置1-2 / 参演道具1-3 从美术资产需求提取",
+        "   - 参考音频1-2 / 参考视频 从 H3 提示词要素提取（可选，留空则不生成对应 Load 节点）",
         "   - 修改指令 列留空，供审阅时填写修改意见",
         "",
         "2. Sheet2「美术资产路径」",
-        "   - 自动收集所有镜头涉及的资产（角色/场景/道具），去重排列",
+        "   - 自动收集所有镜头涉及的资产（角色/场景/道具/音频/视频），去重排列",
         "   - 在 input路径 列填写对应的 ComfyUI input 目录相对路径",
         "   - 示例: h3_ref/角色/黑猫沈天然/沈天然黑猫定妆照.png",
         "",
@@ -243,10 +255,10 @@ def generate_excel(global_info, shots, output_path):
 
 def collect_assets_from_md(md_path):
     """从单个 MD 文件收集资产清单，返回 dict: {type: set(names)}。
-    type 为 "角色"/"场景"/"道具"。
+    type 为 "角色"/"场景"/"道具"/"音频"/"视频"。
     """
     _, shots = parse_md(md_path)
-    assets = {"角色": set(), "场景": set(), "道具": set()}
+    assets = {"角色": set(), "场景": set(), "道具": set(), "音频": set(), "视频": set()}
     for shot in shots:
         for c in _split_assets(shot.get("参演角色", "")):
             assets["角色"].add(c)
@@ -254,6 +266,12 @@ def collect_assets_from_md(md_path):
             assets["场景"].add(s)
         for p in _split_assets(shot.get("道具参考", "")):
             assets["道具"].add(p)
+        for a in _split_assets(shot.get("参考音频1", "")):
+            assets["音频"].add(a)
+        for a in _split_assets(shot.get("参考音频2", "")):
+            assets["音频"].add(a)
+        for v in _split_assets(shot.get("参考视频", "")):
+            assets["视频"].add(v)
     return assets
 
 
@@ -261,7 +279,7 @@ def collect_assets_batch(md_files):
     """从多个 MD 文件收集全局资产清单。
     返回 dict: {"global": {type: set}, "episodes": {stem: {type: set}}}
     """
-    global_assets = {"角色": set(), "场景": set(), "道具": set()}
+    global_assets = {"角色": set(), "场景": set(), "道具": set(), "音频": set(), "视频": set()}
     episodes = {}
     for md_path in md_files:
         stem = Path(md_path).stem
