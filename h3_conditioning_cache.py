@@ -385,6 +385,7 @@ class H3SaveVideo:
                     "tooltip": "保存路径（相对于 output 目录），如 h3_videos/A12。视频将保存为 A12.mp4。",
                 }),
             },
+            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
         }
 
     RETURN_TYPES = ("STRING",)
@@ -393,7 +394,7 @@ class H3SaveVideo:
     OUTPUT_NODE = True
     CATEGORY = "H3Cache"
 
-    def save(self, video, save_path):
+    def save(self, video, save_path, prompt=None, extra_pnginfo=None):
         if video is None:
             print("[H3Cache] H3SaveVideo: video is None, skipping")
             return {"result": ("",)}
@@ -434,10 +435,19 @@ class H3SaveVideo:
         filepath = os.path.join(folder, f"{safe_name}.{ext}")
 
         # Save the video using ComfyUI's Video API
+        # Embed workflow/prompt metadata so comfyui_metadata_reader can read it.
+        metadata = None
+        if extra_pnginfo and isinstance(extra_pnginfo, dict):
+            metadata = dict(extra_pnginfo)
+        if prompt is not None:
+            if metadata is None:
+                metadata = {}
+            metadata["prompt"] = prompt
+
         saved = False
         try:
             if fmt is not None:
-                video.save_to(filepath, format=fmt, codec="auto", metadata=None, crf=None)
+                video.save_to(filepath, format=fmt, codec="auto", metadata=metadata, crf=None)
                 saved = True
             else:
                 video.save_to(filepath)

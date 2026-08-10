@@ -7,6 +7,14 @@
 
 </div>
 
+<div align="center">
+
+#### 🎬 演示视频 / Demo Video
+
+[▶ 点击观看套件演示视频 · Watch the Suite Demo](https://www.bilibili.com/video/BV1MMuR6fEnf/?share_source=copy_web&vd_source=ac000c263d73c325e7ba5b3e3d2830d7)
+
+</div>
+
 ---
 
 ## 为什么做这套工具 / Why This Suite
@@ -60,6 +68,7 @@ flowchart LR
 ## Table of Contents
 
 - [为什么做这套工具 / Why This Suite](#为什么做这套工具--why-this-suite)
+- [分镜导演 Skill / Storyboard Director Skill](#分镜导演-skill--storyboard-director-skill)
 - [核心技术思路 / Core Idea](#核心技术思路--core-idea)
 - [两阶段管线 / Two-Phase Pipeline](#两阶段管线--two-phase-pipeline)
 - [安装 / Installation](#安装--installation)
@@ -73,6 +82,56 @@ flowchart LR
 
 ---
 
+## 分镜导演 Skill / Storyboard Director Skill
+
+> 本仓库附带一个**分镜导演** Skill（`skills/storyboard-director/`），负责生产链路的第一环：把**任意剧本 / 场景描述**转成合格的分镜头需求 MD（含 H3 提示词、美术资产需求），供下游工具链消费。
+
+### Skill 是什么 / What the Skill Does
+
+一个面向 **AI 动画短剧生产** 的分镜设计与审阅知识库 + 标准流程。它把专业分镜方法论沉淀为可调用的规范，帮助 AI 从剧本出发，设计出既符合叙事规律、又满足 H3 生成可行性的结构化分镜表与视频提示词。该 Skill 沉淀自真实 AI 动画短剧生产实践，公开版已去除未发布作品的敏感设定信息，保留可直接复用的完整方法论。
+
+### 目录结构 / Structure
+
+```
+skills/storyboard-director/
+├── SKILL.md                  # 主规范：触发条件、流程、H3 提示词规则、输出模板
+└── references/               # 分镜知识库（7 个子库）
+    ├── 01_分镜理论库/          # 景别、机位、构图、节奏、转场、运镜
+    ├── 02_方法论库/            # 剧本拆解、情绪镜头、镜头序列设计、衔接逻辑
+    ├── 03_评审标准库/          # 分镜评审 Checklist、AI 动画特殊检查项
+    ├── 04_项目规范/            # 风格规范、标准分镜表模板、短剧铁律、镜头语言速查
+    ├── 05_参考案例/            # 横屏 / 竖屏分镜示例（文学版转结构化版）
+    ├── 06_H3提示词指南/        # H3 base / reference 提示词规范
+    └── 07_官方分镜方法论/       # H3 官方工作流与分镜表设计
+```
+
+### 使用方法 / Usage
+
+**在 TRAE 中使用（推荐）**：把 `skills/storyboard-director/` 复制到任一项目的 `.trae/skills/` 下，重启后即可作为 Skill 调用。向 AI 提出任意一种诉求即可触发：
+
+| 触发诉求 | 示例 | 输出 |
+| --- | --- | --- |
+| 设计分镜 | "帮我设计第X集分镜" / "把这个剧本变成分镜" | 结构化分镜表 |
+| 审阅分镜 | "帮我看看这个分镜合不合格" | 审阅报告 + Checklist |
+| 优化分镜 | "这个分镜有问题，帮我改" | 修改后的分镜表 |
+| 查询理论 | "什么是 180 度规则" / "推镜头和拉镜头的区别" | 理论库查询结果 |
+
+**在其他 AI 工具中使用**：`SKILL.md` 本身是一份自洽的提示词规范，可整份粘贴给任意支持长上下文的 AI 助手，配合 `references/` 知识库使用。
+
+### 与下游工具链的衔接 / Integration
+
+Skill 输出的 **分镜头需求_第X集.md** 直接接入套件工具链：
+
+```
+剧本 → 分镜导演 Skill → 分镜头需求_第X集.md
+       → shot_md_to_excel.py → 提示词审阅表.xlsx（人工审阅）
+       → excel_to_multi_chain_json.py → 多链生产 JSON
+       → 批量预编码 .pt → 批量生成视频
+```
+
+详见 [分镜头需求制作指南](docs/分镜头需求制作指南.md)。
+
+---
 ## 为什么需要条件缓存 / Why Conditioning Cache
 
 MiniMax H3 的文生视频/参考生视频在**每次采样前**都要把文本提示词推过 Qwen3-VL-32B 文本编码器，并把参考图和参考视频编码进 `minimax_refs` 潜空间。这一过程：
