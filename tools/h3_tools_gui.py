@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """AI剧生产套件 - 独立桌面 GUI 工具
 
-三标签页：
+四标签页：
   Tab 1: MD → Excel（分镜头需求MD转审阅表Excel）
   Tab 2: 资产管理（收集/映射/上传美术资产路径）
   Tab 3: Excel → JSON（审阅表Excel转多链生产JSON）
+  Tab 4: .pt 元数据读取器（扫描 .pt 缓存文件，查看时长/分辨率/提示词等）
 
-依赖同目录的 shot_md_to_excel.py 和 excel_to_multi_chain_json.py。
+依赖同目录的 shot_md_to_excel.py、excel_to_multi_chain_json.py、pt_meta_reader.py。
 """
 
 import os
@@ -14,6 +15,7 @@ import sys
 import json
 import threading
 import queue
+import subprocess
 import importlib.util
 from pathlib import Path
 import tkinter as tk
@@ -146,7 +148,7 @@ class H3ToolsApp:
     # ── 构建 UI ──
 
     def _build_ui(self):
-        """构建主界面，包含三个标签页。"""
+        """构建主界面，包含四个标签页。"""
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
@@ -164,6 +166,11 @@ class H3ToolsApp:
         self.tab_json = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_json, text="  Excel → JSON  ")
         self._build_tab_excel_to_json(self.tab_json)
+
+        # Tab 4: .pt 元数据读取器
+        self.tab_pt = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_pt, text="  .pt 元数据读取器  ")
+        self._build_tab_pt_reader(self.tab_pt)
 
     # ── Tab 1: MD → Excel ──
 
@@ -858,6 +865,281 @@ class H3ToolsApp:
         finally:
             self.log_queue.put(("done", "json", success, fail))
 
+    # ── Tab 4: .pt 元数据读取器 ──
+
+    def _build_tab_pt_reader(self, parent):
+        """构建 .pt 元数据读取器标签页。"""
+        # 顶部：选择文件/目录
+        input_frame = ttk.LabelFrame(parent, text="选择 .pt 文件或目录")
+        input_frame.pack(fill=tk.X, padx=10, pady=(10, 5))
+
+        btn_container = ttk.Frame(input_frame)
+        btn_container.pack(fill=tk.X, padx=8, pady=8)
+        ttk.Button(btn_container, text="选择 .pt 文件",
+                   command=self._pt_add_files).pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Button(btn_container, text="选择目录",
+                   command=self._pt_browse_dir).pack(side=tk.LEFT, padx=4)
+        ttk.Button(btn_container, text="扫描并读取",
+                   command=self._pt_scan).pack(side=tk.LEFT, padx=4)
+        ttk.Button(btn_container, text="清空列表",
+                   command=self._pt_clear).pack(side=tk.LEFT, padx=4)
+
+        # 当前扫描路径显示
+        path_container = ttk.Frame(input_frame)
+        path_container.pack(fill=tk.X, padx=8, pady=(0, 8))
+        ttk.Label(path_container, text="扫描路径:").pack(side=tk.LEFT)
+        self.pt_path_var = tk.StringVar(value="")
+        ttk.Entry(path_container, textvariable=self.pt_path_var,
+                  state="readonly").pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 0))
+
+        # 结果 Treeview
+        result_frame = ttk.LabelFrame(parent, text="元数据列表")
+        result_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        tree_container = ttk.Frame(result_frame)
+        tree_container.pack(fill=tk.BOTH, expand=True, padx=8, pady=(8, 2))
+
+        self.pt_tree = ttk.Treeview(
+            tree_container,
+            columns=("filename", "duration", "resolution", "frames", "size", "prompt", "ref_imgs", "error"),
+            show="headings", height=12,
+        )
+        self.pt_tree.heading("filename", text="文件名")
+        self.pt_tree.heading("duration", text="时长(秒)")
+        self.pt_tree.heading("resolution", text="分辨率")
+        self.pt_tree.heading("frames", text="帧数")
+        self.pt_tree.heading("size", text="大小(MB)")
+        self.pt_tree.heading("prompt", text="提示词")
+        self.pt_tree.heading("ref_imgs", text="参考图数")
+        self.pt_tree.heading("error", text="错误")
+        self.pt_tree.column("filename", width=180, anchor=tk.W)
+        self.pt_tree.column("duration", width=70, anchor=tk.CENTER)
+        self.pt_tree.column("resolution", width=90, anchor=tk.CENTER)
+        self.pt_tree.column("frames", width=60, anchor=tk.CENTER)
+        self.pt_tree.column("size", width=70, anchor=tk.CENTER)
+        self.pt_tree.column("prompt", width=200, anchor=tk.W)
+        self.pt_tree.column("ref_imgs", width=70, anchor=tk.CENTER)
+        self.pt_tree.column("error", width=150, anchor=tk.W)
+
+        pt_scroll = ttk.Scrollbar(tree_container, orient=tk.VERTICAL,
+                                  command=self.pt_tree.yview)
+        self.pt_tree.configure(yscrollcommand=pt_scroll.set)
+        self.pt_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        pt_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 选中行时显示完整提示词
+        self.pt_tree.bind("<<TreeviewSelect>>", self._pt_on_select)
+
+        # 提示词预览
+        preview_frame = ttk.LabelFrame(parent, text="提示词预览（选中行查看完整提示词）")
+        preview_frame.pack(fill=tk.BOTH, expand=False, padx=10, pady=(5, 5))
+        self.pt_prompt_preview = scrolledtext.ScrolledText(
+            preview_frame, height=6, font=("Consolas", 9),
+            state=tk.DISABLED, wrap=tk.WORD,
+        )
+        self.pt_prompt_preview.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+
+        # 日志区域
+        log_frame = ttk.LabelFrame(parent, text="日志")
+        log_frame.pack(fill=tk.BOTH, expand=False, padx=10, pady=(5, 10))
+        self.pt_log = scrolledtext.ScrolledText(
+            log_frame, height=6, font=("Consolas", 9),
+            state=tk.DISABLED, wrap=tk.WORD,
+        )
+        self.pt_log.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+
+    def _pt_add_files(self):
+        """选择单个或多个 .pt 文件。"""
+        files = filedialog.askopenfilenames(
+            title="选择 .pt 文件",
+            filetypes=[("PyTorch .pt 文件", "*.pt"), ("所有文件", "*.*")],
+        )
+        if files:
+            self.pt_path_var.set("; ".join(files))
+
+    def _pt_browse_dir(self):
+        """选择包含 .pt 文件的目录。"""
+        d = filedialog.askdirectory(title="选择包含 .pt 文件的目录")
+        if d:
+            self.pt_path_var.set(d)
+
+    def _pt_clear(self):
+        """清空结果列表和预览。"""
+        for item in self.pt_tree.get_children():
+            self.pt_tree.delete(item)
+        self.pt_prompt_preview.configure(state=tk.NORMAL)
+        self.pt_prompt_preview.delete("1.0", tk.END)
+        self.pt_prompt_preview.configure(state=tk.DISABLED)
+
+    def _pt_find_comfy_python(self):
+        """查找 ComfyUI 的 Python（带 torch）。"""
+        candidates = [
+            r"F:\02aidraw\ComfyUI-aki-v3\python\python.exe",
+            r"F:\02aidraw\ComfyUI-aki-v3\python_embeded\python.exe",
+            os.path.join(os.path.dirname(TOOLS_DIR), "..", "..", "python", "python.exe"),
+            sys.executable,
+        ]
+        for c in candidates:
+            if c and os.path.isfile(c):
+                return c
+        return None
+
+    def _pt_scan(self):
+        """扫描并读取 .pt 文件元数据（后台线程）。"""
+        path_str = self.pt_path_var.get().strip()
+        if not path_str:
+            messagebox.showwarning("提示", "请先选择 .pt 文件或目录。")
+            return
+
+        # 查找 ComfyUI Python
+        comfy_python = self._pt_find_comfy_python()
+        if not comfy_python:
+            messagebox.showerror("错误", "未找到 ComfyUI 的 Python 环境（需要 torch）。\n"
+                                 "请确认 ComfyUI 安装路径。")
+            return
+
+        # 查找 pt_meta_reader.py
+        meta_reader = os.path.join(TOOLS_DIR, "pt_meta_reader.py")
+        if not os.path.isfile(meta_reader):
+            messagebox.showerror("错误", f"未找到 pt_meta_reader.py:\n{meta_reader}")
+            return
+
+        # 支持多路径（分号分隔）
+        paths = [p.strip() for p in path_str.split(";") if p.strip()]
+        if len(paths) == 1:
+            target = paths[0]
+        else:
+            # 多文件时取第一个（pt_meta_reader 一次处理一个路径）
+            target = paths[0]
+
+        # 清空旧结果
+        for item in self.pt_tree.get_children():
+            self.pt_tree.delete(item)
+
+        # 启动后台线程
+        thread = threading.Thread(
+            target=self._pt_scan_worker,
+            args=(comfy_python, meta_reader, target),
+            daemon=True,
+        )
+        thread.start()
+
+    def _pt_scan_worker(self, comfy_python, meta_reader, target):
+        """后台线程：调用 pt_meta_reader.py 读取元数据。"""
+        log = lambda msg: self._log("pt", msg)
+
+        try:
+            log(f"=== 开始扫描: {target} ===")
+            log(f"Python: {comfy_python}")
+            log(f"脚本: {meta_reader}")
+
+            cmd = [comfy_python, meta_reader, target, "--json"]
+            log(f"执行: {' '.join(cmd)}")
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+
+            if result.returncode != 0:
+                log(f"[错误] 返回码: {result.returncode}")
+                log(f"stderr: {result.stderr[:500]}")
+                self.log_queue.put(("done", "pt", 0, 1))
+                return
+
+            # 解析 JSON 输出
+            try:
+                metadata_list = json.loads(result.stdout)
+            except json.JSONDecodeError as e:
+                log(f"[错误] JSON 解析失败: {e}")
+                log(f"stdout 前200字符: {result.stdout[:200]}")
+                self.log_queue.put(("done", "pt", 0, 1))
+                return
+
+            if not metadata_list:
+                log("未找到 .pt 文件。")
+                self.log_queue.put(("done", "pt", 0, 0))
+                return
+
+            log(f"找到 {len(metadata_list)} 个 .pt 文件，开始解析...")
+
+            # 将结果发送到主线程更新 UI
+            self.log_queue.put(("pt_results", metadata_list))
+
+        except Exception as e:
+            log(f"[错误] 扫描过程中发生异常: {e}")
+            import traceback
+            log(traceback.format_exc())
+            self.log_queue.put(("done", "pt", 0, 1))
+
+    def _pt_populate_results(self, metadata_list):
+        """在主线程中填充 Treeview 结果。"""
+        success_count = 0
+        error_count = 0
+
+        for item in metadata_list:
+            filename = item.get("filename", "?")
+            duration = item.get("duration")
+            width = item.get("width")
+            height = item.get("height")
+            frame_count = item.get("frame_count")
+            size_mb = item.get("size_mb")
+            has_prompt = item.get("has_prompt", False)
+            prompt_preview = item.get("prompt_preview") or ""
+            ref_image_count = item.get("ref_image_count", 0)
+            error = item.get("error")
+
+            # 格式化显示
+            dur_str = f"{duration:.1f}" if duration is not None else "-"
+            res_str = f"{int(width)}x{int(height)}" if width and height else "-"
+            frame_str = str(frame_count) if frame_count is not None else "-"
+            size_str = f"{size_mb:.1f}" if size_mb is not None else "-"
+            prompt_str = prompt_preview[:80] + ("..." if len(prompt_preview) > 80 else "") if prompt_preview else ("无" if not has_prompt else "有")
+            ref_str = str(ref_image_count) if ref_image_count else "0"
+            err_str = error or ""
+
+            if error:
+                error_count += 1
+            else:
+                success_count += 1
+
+            # 存储完整数据供选中预览使用
+            self.pt_tree.insert("", tk.END, values=(
+                filename, dur_str, res_str, frame_str, size_str,
+                prompt_str, ref_str, err_str
+            ), tags=(json.dumps(item),))
+
+        self._log("pt", f"扫描完成: {success_count} 成功, {error_count} 错误")
+        self.log_queue.put(("done", "pt", success_count, error_count))
+
+    def _pt_on_select(self, event=None):
+        """选中行时显示完整提示词。"""
+        selection = self.pt_tree.selection()
+        if not selection:
+            return
+
+        item = selection[0]
+        tags = self.pt_tree.item(item, "tags")
+        if not tags:
+            return
+
+        try:
+            data = json.loads(tags[0])
+        except (json.JSONDecodeError, IndexError):
+            return
+
+        prompt_text = data.get("prompt_preview") or ""
+        if not prompt_text:
+            prompt_text = data.get("error") or "(无提示词)"
+
+        self.pt_prompt_preview.configure(state=tk.NORMAL)
+        self.pt_prompt_preview.delete("1.0", tk.END)
+        self.pt_prompt_preview.insert("1.0", prompt_text)
+        self.pt_prompt_preview.configure(state=tk.DISABLED)
+
     # ── 公共方法 ──
 
     def _log(self, tab, msg):
@@ -870,6 +1152,7 @@ class H3ToolsApp:
             "md": getattr(self, "md_log", None),
             "asset": getattr(self, "asset_log", None),
             "json": getattr(self, "json_log", None),
+            "pt": getattr(self, "pt_log", None),
         }
         return mapping.get(tab)
 
@@ -903,6 +1186,10 @@ class H3ToolsApp:
             elif msg_type == "assets_ready":
                 self._populate_asset_tab()
 
+            elif msg_type == "pt_results":
+                _, metadata_list = item
+                self._pt_populate_results(metadata_list)
+
         self.root.after(100, self._poll_log_queue)
 
     def _handle_done(self, tab, success, fail):
@@ -915,6 +1202,8 @@ class H3ToolsApp:
         elif tab == "json":
             self.json_run_btn.configure(state=tk.NORMAL)
             title = "Excel → JSON 完成"
+        elif tab == "pt":
+            title = ".pt 元数据读取完成"
         else:
             return
 
