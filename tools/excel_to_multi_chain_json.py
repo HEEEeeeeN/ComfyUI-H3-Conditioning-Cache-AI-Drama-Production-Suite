@@ -192,7 +192,7 @@ def rewrite_prompt(prompt, char, scene, prop, sup_chars):
 
 # ── 多链 JSON 生成 ───────────────────────────────────────────────────
 
-def build_shared_nodes(idgen):
+def build_shared_nodes(idgen, resolution=0.5):
     """创建循环体外共享节点，返回节点列表和输出引用。"""
     nodes = []
 
@@ -226,10 +226,24 @@ def build_shared_nodes(idgen):
         color="#322", bgcolor="#533",
     ))
 
+    # ResolutionSelector (共享，全组一个)
+    res_id = idgen.node()
+    nodes.append(make_node(
+        res_id, "ResolutionSelector", f"Resolution (Shared, {resolution})",
+        [-1800, -100], [300, 82],
+        widgets_values=["16:9 (Widescreen)", float(resolution), 32],
+        outputs=[
+            make_output("width", "INT", links=[], slot=0),
+            make_output("height", "INT", links=[], slot=1),
+        ],
+        color="#322", bgcolor="#533",
+    ))
+
     refs = {
         "clip_id": clip_id, "clip_out": 0,
         "vae_v_id": vae_v_id, "vae_v_out": 0,
         "vae_a_id": vae_a_id, "vae_a_out": 0,
+        "res_id": res_id, "res_w_out": 0, "res_h_out": 1,
     }
     return nodes, refs
 
@@ -312,7 +326,6 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
 
     shot_id = shot.get("镜头编号", "unknown")
     duration = _extract_number(shot.get("时长", "5"), 5.0)
-    resolution = _extract_number(shot.get("分辨率", "0.5"), 0.5)
 
     # 获取参演资产
     char = shot.get("参演角色1", "")
@@ -323,11 +336,6 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
         sc = shot.get(f"参演角色{i}", "")
         if sc:
             sup_chars.append(sc)
-
-    # ── Compute width/height from resolution (16:9, aligned to 32) ──
-    BASE_W, BASE_H = 1280, 720
-    width = int(BASE_W * resolution / 32) * 32
-    height = int(BASE_H * resolution / 32) * 32
 
     # ── Per-shot PrimitiveFloat (duration) ──
     dur_id = idgen.node()
@@ -493,6 +501,18 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     links.append([audio_vae_lid, shared_refs["vae_a_id"], shared_refs["vae_a_out"],
                   r2v_id, 2, "VAE"])
 
+    # width 连接 (shared ResolutionSelector)
+    w_lid = idgen.link()
+    r2v_inputs.append(make_input("width", "INT", link=w_lid, widget_name="width"))
+    links.append([w_lid, shared_refs["res_id"], shared_refs["res_w_out"],
+                  r2v_id, 1, "INT"])
+
+    # height 连接 (shared ResolutionSelector)
+    h_lid = idgen.link()
+    r2v_inputs.append(make_input("height", "INT", link=h_lid, widget_name="height"))
+    links.append([h_lid, shared_refs["res_id"], shared_refs["res_h_out"],
+                  r2v_id, 2, "INT"])
+
     # prompt 连接
     prompt_lid = idgen.link()
     r2v_inputs.append(make_input("prompt", "STRING", link=prompt_lid))
@@ -514,7 +534,7 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
         [x_offset, y_offset], [400, 300],
         inputs=r2v_inputs,
         outputs=r2v_outputs,
-        widgets_values=["", 0, width, height, "match"],
+        widgets_values=[],
     )
     nodes.append(r2v_node)
 
@@ -532,6 +552,14 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     save_dur_lid = idgen.link()
     links.append([save_dur_lid, dur_id, 0, save_id, 2, "FLOAT"])
 
+    # width/height 连接 (shared ResolutionSelector)
+    save_w_lid = idgen.link()
+    links.append([save_w_lid, shared_refs["res_id"], shared_refs["res_w_out"],
+                  save_id, 3, "INT"])
+    save_h_lid = idgen.link()
+    links.append([save_h_lid, shared_refs["res_id"], shared_refs["res_h_out"],
+                  save_id, 4, "INT"])
+
     save_node = make_node(
         save_id, "H3SaveConditioning", f"Save ({shot_id}.pt)",
         [x_offset + 500, y_offset], [300, 120],
@@ -539,9 +567,11 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
             make_input("conditioning", "CONDITIONING", link=save_lid),
             make_input("vae", "VAE", link=save_vae_lid),
             make_input("duration", "FLOAT", link=save_dur_lid, widget_name="duration"),
+            make_input("width", "INT", link=save_w_lid, widget_name="width"),
+            make_input("height", "INT", link=save_h_lid, widget_name="height"),
         ],
         outputs=[],
-        widgets_values=[shot_id, width, height],
+        widgets_values=[shot_id],
         color="#232", bgcolor="#353",
     )
     nodes.append(save_node)
@@ -555,8 +585,11 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
     all_nodes = []
     all_links = []
 
+    # 从第一个镜头提取分辨率（全组共享）
+    resolution = _extract_number(group_shots[0].get("分辨率", "0.5"), 0.5)
+
     # 共享节点
-    shared_nodes, shared_refs = build_shared_nodes(idgen)
+    shared_nodes, shared_refs = build_shared_nodes(idgen, resolution)
     all_nodes.extend(shared_nodes)
 
     # ── 合并 LoadImage ──
@@ -660,6 +693,11 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
         elif node["type"] == "VAELoader" and node["title"] == "Audio VAE":
             vae_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
             node["outputs"][0]["links"] = vae_links
+        elif node["type"] == "ResolutionSelector":
+            w_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
+            h_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 1]
+            node["outputs"][0]["links"] = w_links
+            node["outputs"][1]["links"] = h_links
         elif node["type"] == "LoadImage":
             img_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
             node["outputs"][0]["links"] = img_links
