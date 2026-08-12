@@ -248,7 +248,7 @@ The camera holds a static shot as the runner exits the frame.
 
 可用运动类型：Zoom In/Out, Push In/Pull Out, Pan Left/Right, Truck Left/Right, Tilt Up/Down, Pedestal Up/Down, Arc Shot, Tracking Shot, Static Shot, Shake, POV, Roll。
 
-#### 8.5 对白格式
+#### 8.5 对白格式与语言标注
 
 使用稳定说话人 ID `(S1)`、`(S2)`，对白用 `<d>[语言] 内容</d>` 包裹：
 
@@ -257,6 +257,41 @@ The young woman with a quiet, breathy voice (S1) says: <d>[English] I get off at
 ```
 
 画外音用 `says in an off-screen voiceover`，并标注嘴唇保持闭合。
+
+**台词语言标注规范**：
+
+剧本中台词可能存在多种语言（原文、翻译、混用），分镜导演必须逐句检测台词语言并正确标注，确保下游 TTS 合成和提示词审阅表能准确识别。
+
+| 语言标签 | 适用场景 | 示例 |
+|---------|---------|------|
+| `[Chinese]` | 中文台词（普通话） | `<d>[Chinese] 我下一站下车。</d>` |
+| `[Japanese]` | 日语台词 | `<d>[Japanese] 次の駅で降ります。</d>` |
+| `[English]` | 英语台词 | `<d>[English] I get off at the next station.</d>` |
+| `[Korean]` | 韩语台词 | `<d>[Korean] 다음 역에서 내립니다.</d>` |
+| `[Mixed]` | 同一句中混用两种以上语言 | `<d>[Mixed] 好的, thank you very much.</d>` |
+| `[Silent]` | 无台词，仅有语气词/呼吸声 | `<d>[Silent] (heavy breathing)</d>` |
+
+**语言检测规则**：
+1. **优先检测剧本原文语言**：若剧本为中文，台词默认标注 `[Chinese]`；若剧本为日文，默认 `[Japanese]`
+2. **翻译剧本**：若剧本是翻译版（如日文原作译为中文），台词应标注**实际配音语言**，而非原文语言。例如中文配音的日本动画，台词标注 `[Chinese]`
+3. **混用台词**：同一句中包含两种以上语言时标注 `[Mixed]`，并在 TTS 指引中注明主语言
+4. **语气词**：纯语气词（"啊"、"嗯"、"ふん"）按所在语言的台词标注，不单独拆出
+5. **一致性**：同一角色在不同镜头中的语言标签必须一致；若角色切换语言（如双语角色），在镜头要素中注明 "S1 switches to [English]"
+
+**在分镜头需求 MD 中的体现**：
+
+每镜头的"完整 H3 提示词"中，所有对白必须使用 `<d>[语言] 内容</d>` 格式。例如：
+
+```
+integrated_multimodal_description: [Shot 1] A young woman (S1) stands on a train platform. She turns and says <d>[Chinese] 我下一站下车。</d> The train arrives.
+overall_soundscape: Station announcement chime, distant train horn, footsteps on concrete.
+non_diegetic_music: 无背景音乐，禁止任何配乐/音乐，本镜头不要背景音乐，仅保留环境音与音效
+```
+
+**下游衔接**：
+- `shot_md_to_excel.py` 生成 Excel 时，自动检测 `<d></d>` 标记，将台词部分以红色字体显示，便于审阅
+- TTS 合成时，根据 `[语言]` 标签选择对应的语音模型
+- 若发现台词缺少语言标签，视为格式错误，需补全后再生成分镜
 
 ### Step 9：生成分镜头需求 MD 文件
 
@@ -607,6 +642,7 @@ Step 7: 输出审阅报告
 | 2.0 | 2026-08-09 | 新增 H3 官方提示词指南（06目录），Step 8 改为 H3 提示词生成，新增 Step 9 分镜头需求MD输出，新增第十二章 MD格式规范 |
 | 3.0 | 2026-08-10 | 整合 MiniMax 官方 H3 Skill（h3-prompt-writing + 3d-animation-short-generator）：新增 07_官方分镜方法论（六列镜头表设计法 + 官方提示词工作流），Step 5 增 5.1 官方质量增强，Step 7 补空间锚点卡与连续性，Step 8 引用官方工作流，Step 10 增镜头表自检门（6项强制） |
 | 3.1 | 2026-08-12 | 新增 Step 9.1 美术资产缺失清单生成：分镜需求 MD 完成后自动输出独立的 `美术资产缺失清单_第X集.md`，含角色/场景/道具/音频/视频五类资产汇总表，衔接 GUI 资产管理标签页 |
+| 3.2 | 2026-08-12 | 增强 8.5 对白格式与语言标注：新增台词语言检测规范（Chinese/Japanese/English/Korean/Mixed/Silent 六类标签）、翻译剧本标注规则、角色语言一致性检查、下游 Excel 台词红色显示衔接 |
 
 ---
 

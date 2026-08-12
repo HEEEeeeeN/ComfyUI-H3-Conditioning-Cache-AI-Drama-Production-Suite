@@ -27,6 +27,8 @@ try:
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
     from openpyxl.worksheet.datavalidation import DataValidation
+    from openpyxl.cell.rich_text import CellRichText, TextBlock
+    from openpyxl.cell.text import InlineFont
 except ImportError:
     print("ERROR: openpyxl not found. Install with: pip install openpyxl")
     sys.exit(1)
@@ -88,6 +90,10 @@ THIN_BORDER = Border(
     bottom=Side(style="thin", color="CCCCCC"),
 )
 
+# 对白红色字体（用于 <d></d> 标记的台词部分）
+DIALOGUE_FONT = InlineFont(color="FF0000")
+NORMAL_FONT = InlineFont(color="000000")
+
 SHEET1_HEADERS = [
     "镜头编号", "时长", "分辨率", "场景", "镜头调度", "约束条件", "镜头风格",
     "完整提示词",
@@ -111,6 +117,37 @@ def _col_letter(col_idx):
     if col_idx <= 26:
         return chr(64 + col_idx)
     return chr(64 + (col_idx - 1) // 26) + chr(65 + (col_idx - 1) % 26)
+
+
+def _make_rich_text(text):
+    """将包含 <d></d> 标记的文本转为 CellRichText，台词部分红色显示。
+
+    无 <d> 标记时返回原始字符串（不创建 CellRichText，避免开销）。
+    """
+    if not text or "<d>" not in str(text):
+        return text
+
+    text = str(text)
+    blocks = []
+    pattern = re.compile(r"(<d>.*?</d>)", re.DOTALL)
+    last_end = 0
+
+    for m in pattern.finditer(text):
+        # 标记前的普通文本
+        if m.start() > last_end:
+            blocks.append(TextBlock(NORMAL_FONT, text[last_end:m.start()]))
+        # <d></d> 内的台词文本（红色）
+        blocks.append(TextBlock(DIALOGUE_FONT, m.group(1)))
+        last_end = m.end()
+
+    # 末尾普通文本
+    if last_end < len(text):
+        blocks.append(TextBlock(NORMAL_FONT, text[last_end:]))
+
+    if not blocks:
+        return text
+
+    return CellRichText(blocks)
 
 
 def generate_excel(global_info, shots, output_path):
@@ -160,6 +197,9 @@ def generate_excel(global_info, shots, output_path):
         ]
 
         for col, value in enumerate(row_data, 1):
+            # 第8列"完整提示词"：对 <d></d> 标记的台词部分用红色富文本显示
+            if col == 8:
+                value = _make_rich_text(value)
             cell = ws1.cell(row=row_idx, column=col, value=value)
             cell.border = THIN_BORDER
             cell.alignment = Alignment(vertical="top", wrap_text=True)
@@ -231,7 +271,7 @@ def generate_excel(global_info, shots, output_path):
         "   - 时长 列可审阅修改（单位: 秒，直接编辑数值）",
         "   - 分辨率 列下拉选择 0.4 或 0.5（对应 H3 节点分辨率系数，0.5=高清, 0.4=经济）",
         "   - 场景/镜头调度/约束条件/镜头风格 列从 H3 提示词要素提取",
-        "   - 完整提示词 列为 H3 三核心字段原文",
+        "   - 完整提示词 列为 H3 三核心字段原文，其中 <d>[语言] 台词</d> 标记的台词部分以红色显示",
         "   - 参演角色1-3 / 场景设置1-2 / 参演道具1-3 从美术资产需求提取",
         "   - 参考音频1-2 / 参考视频 从 H3 提示词要素提取（可选，留空则不生成对应 Load 节点）",
         "   - 修改指令 列留空，供审阅时填写修改意见",
