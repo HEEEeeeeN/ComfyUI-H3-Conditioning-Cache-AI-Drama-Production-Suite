@@ -215,6 +215,72 @@ def _reencode_ref_images(ref_images_tensor, vae, width, height, ref_image_size="
 
 
 # ---------------------------------------------------------------------------
+# Node: H3EncodeConditioning (CLIP-only pre-encode, no VAE)
+#
+# 拆解自 MiniMaxH3ReferenceToVideo：
+#   - 只执行 Qwen3VL CLIP 编码（文本 + 参考图视觉 token）→ conditioning
+#   - 不做参考图 VAE 编码（minimax_refs 留空），不加载 VAE，省显存
+#   - 不依赖 width/height/length（参考图用固定 "max" 短边缩放，与最终分辨率解耦）
+#   - 配合 H3ReencodeFromCache：生成阶段用目标 vae + 分辨率重新编码参考图
+# ---------------------------------------------------------------------------
+
+class H3EncodeConditioning:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "clip": ("CLIP",),
+                "prompt": ("STRING", {
+                    "default": "",
+                    "multiline": True,
+                    "tooltip": "H3 提示词全文（九分节或 Ref2VA 格式）。",
+                }),
+            },
+            "optional": {
+                "ref_image_0": ("IMAGE", {
+                    "tooltip": "参考图 1（主角色等）。仅用于 Qwen3VL 视觉编码；生成阶段由 H3ReencodeFromCache 重新 VAE 编码。",
+                }),
+                "ref_image_1": ("IMAGE", {
+                    "tooltip": "参考图 2（可选）。",
+                }),
+                "ref_image_2": ("IMAGE", {
+                    "tooltip": "参考图 3（可选）。",
+                }),
+                "ref_image_3": ("IMAGE", {
+                    "tooltip": "参考图 4（可选）。",
+                }),
+            },
+        }
+
+    RETURN_TYPES = ("CONDITIONING",)
+    RETURN_NAMES = ("conditioning",)
+    FUNCTION = "encode"
+    CATEGORY = "H3Cache"
+
+    def encode(self, clip, prompt, ref_image_0=None, ref_image_1=None,
+               ref_image_2=None, ref_image_3=None):
+        # 构造 Qwen3VL 参考图条目（固定 "max" 短边缩放，与生成分辨率无关）
+        reference_items = []
+        for img in (ref_image_0, ref_image_1, ref_image_2, ref_image_3):
+            if img is None:
+                continue
+            h, w = img.shape[1], img.shape[2]
+            scale = min(1.0, _REF_IMAGE_SHORT_EDGE / min(w, h))
+            tw = max(_CANVAS_MULTIPLE,
+                     round(w * scale / _CANVAS_MULTIPLE) * _CANVAS_MULTIPLE)
+            th = max(_CANVAS_MULTIPLE,
+                     round(h * scale / _CANVAS_MULTIPLE) * _CANVAS_MULTIPLE)
+            resized = _resize_image(img[:1], tw, th, "disabled")
+            reference_items.append({"type": "image", "data": resized})
+
+        tokens = clip.tokenize(prompt, minimax_ref_items=reference_items)
+        conditioning = clip.encode_from_tokens_scheduled(tokens)
+        print(f"[H3Cache] H3EncodeConditioning: {len(reference_items)} ref image(s) "
+              f"for CLIP encoding (no VAE)")
+        return (conditioning,)
+
+
+# ---------------------------------------------------------------------------
 # Node: H3SaveConditioning
 # ---------------------------------------------------------------------------
 
@@ -757,6 +823,7 @@ class H3SaveVideo:
 
 
 NODE_CLASS_MAPPINGS = {
+    "H3EncodeConditioning": H3EncodeConditioning,
     "H3SaveConditioning": H3SaveConditioning,
     "H3LoadConditioning": H3LoadConditioning,
     "H3LoadConditioningBatch": H3LoadConditioningBatch,
@@ -766,6 +833,7 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
+    "H3EncodeConditioning": "H3 Encode Conditioning (CLIP-only, no VAE)",
     "H3SaveConditioning": "H3 Save Conditioning (cache + ref images)",
     "H3LoadConditioning": "H3 Load Conditioning (cache)",
     "H3LoadConditioningBatch": "H3 Load Conditioning Batch (cache)",
