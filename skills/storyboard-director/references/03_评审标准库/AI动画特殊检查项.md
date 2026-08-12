@@ -254,7 +254,7 @@ blurry, out of focus, overexposed, underexposed
 | 角色类型 | 额外负面提示词 | 原因 |
 |------|--------------|------|
 | 主角青年（神情冷峻设定） | smile, happy expression, clean uniform | 角色设定神情冷峻、衣着有破损 |
-| 少女队员（带伤设定） | healthy skin, clean face, intact hands | 角色带伤、有特殊体质设定 |
+| 少女组员（带伤设定） | healthy skin, clean face, intact hands | 角色带伤、有特殊体质设定 |
 | 高大壮汉角色 | normal proportions, slim build | 角色体型异常壮大 |
 | 机械/义体角色 | human skin, no seams, natural neck | 角色为机械体、有接缝线 |
 
