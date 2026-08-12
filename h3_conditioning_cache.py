@@ -380,6 +380,22 @@ class H3LoadConditioning:
             },
         }
 
+    @classmethod
+    def VALIDATE_INPUTS(cls, **kwargs):
+        """允许 combo 之外的绝对路径（浏览按钮填入），或列表内相对文件名。"""
+        file_name = kwargs.get("file_name", "")
+        if not file_name:
+            return True
+        if os.path.isabs(file_name):
+            if os.path.isfile(file_name):
+                return True
+            return f"Cache file not found: {file_name}"
+        try:
+            _resolve_cache_path(file_name, kwargs.get("cache_dir", ""))
+            return True
+        except Exception as exc:  # noqa: BLE001
+            return str(exc)
+
     RETURN_TYPES = ("CONDITIONING",)
     FUNCTION = "load"
     CATEGORY = "H3Cache"
@@ -508,6 +524,22 @@ class H3ReencodeFromCache:
                 }),
             },
         }
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, **kwargs):
+        """允许 combo 之外的绝对路径（浏览按钮填入），或列表内相对文件名。"""
+        file_name = kwargs.get("file_name", "")
+        if not file_name:
+            return True
+        if os.path.isabs(file_name):
+            if os.path.isfile(file_name):
+                return True
+            return f"Cache file not found: {file_name}"
+        try:
+            _resolve_cache_path(file_name, kwargs.get("cache_dir", ""))
+            return True
+        except Exception as exc:  # noqa: BLE001
+            return str(exc)
 
     RETURN_TYPES = ("CONDITIONING", "LATENT")
     RETURN_NAMES = ("positive", "latent")
