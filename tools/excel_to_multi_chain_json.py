@@ -30,6 +30,27 @@ except ImportError:
     sys.exit(1)
 
 
+def sanitize_filename(name):
+    """清理文件名中的非法字符，截断过长名称。
+
+    Windows 非法字符: \\ / : * ? " < > |
+    同时去除 Excel 单元格中可能混入的 Markdown 格式残留（**、| 等）。
+    """
+    # 去掉 Markdown 粗体标记和管道符分隔的多余内容
+    name = re.sub(r'\*\*', '', name)
+    # 如果名称中包含 |，只取第一部分（通常是角色名）
+    if '|' in name:
+        name = name.split('|')[0].strip()
+    # 替换 Windows 非法字符为下划线
+    name = re.sub(r'[\\/:*?"<>|]', '_', name)
+    # 去除首尾空格和点
+    name = name.strip().strip('.')
+    # 截断过长名称
+    if len(name) > 50:
+        name = name[:50]
+    return name if name else "unnamed"
+
+
 # ── 常量 ─────────────────────────────────────────────────────────────
 
 # MiniMaxH3ReferenceToVideo 的 ref_image 槽位对应的 input 索引
@@ -716,7 +737,8 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
         "version": 0.4,
     }
 
-    output_path = os.path.join(output_dir, f"{group_name}.json")
+    safe_name = sanitize_filename(group_name)
+    output_path = os.path.join(output_dir, f"{safe_name}.json")
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(wf, f, ensure_ascii=False, indent=1)
 

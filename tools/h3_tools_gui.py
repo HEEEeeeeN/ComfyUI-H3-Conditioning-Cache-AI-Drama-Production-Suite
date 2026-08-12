@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """AI剧生产套件 - 独立桌面 GUI 工具
 
-四标签页：
+五标签页：
   Tab 1: MD → Excel（分镜头需求MD转审阅表Excel）
   Tab 2: 资产管理（收集/映射/上传美术资产路径）
   Tab 3: Excel → JSON（审阅表Excel转多链生产JSON）
   Tab 4: .pt 元数据读取器（扫描 .pt 缓存文件，查看时长/分辨率/提示词等）
+  Tab 5: 资产准备表 → Krea2 JSON（美术资产准备表MD转Krea2工作流JSON）
 
-依赖同目录的 shot_md_to_excel.py、excel_to_multi_chain_json.py、pt_meta_reader.py。
+依赖同目录的 shot_md_to_excel.py、excel_to_multi_chain_json.py、pt_meta_reader.py、
+asset_md_to_krea2_json.py。
 """
 
 import os
@@ -69,6 +71,7 @@ class H3ToolsApp:
         # 动态导入模块
         self.md_module = None
         self.excel_module = None
+        self.asset_krea2_module = None
         self._import_error = ""
 
         try:
@@ -82,6 +85,13 @@ class H3ToolsApp:
             )
         except Exception as e:
             self._import_error += f"无法加载 excel_to_multi_chain_json.py: {e}\n"
+
+        try:
+            self.asset_krea2_module = _import_module(
+                "asset_md_to_krea2_json.py", "asset_md_to_krea2_json"
+            )
+        except Exception as e:
+            self._import_error += f"无法加载 asset_md_to_krea2_json.py: {e}\n"
 
         self._setup_style()
         self._build_ui()
@@ -171,6 +181,11 @@ class H3ToolsApp:
         self.tab_pt = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_pt, text="  .pt 元数据读取器  ")
         self._build_tab_pt_reader(self.tab_pt)
+
+        # Tab 5: 资产准备表 → Krea2 JSON
+        self.tab_krea2 = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_krea2, text="  资产准备表 → Krea2 JSON  ")
+        self._build_tab_asset_krea2(self.tab_krea2)
 
     # ── Tab 1: MD → Excel ──
 
@@ -1140,6 +1155,173 @@ class H3ToolsApp:
         self.pt_prompt_preview.insert("1.0", prompt_text)
         self.pt_prompt_preview.configure(state=tk.DISABLED)
 
+    # ── Tab 5: 资产准备表 → Krea2 JSON ──
+
+    def _build_tab_asset_krea2(self, parent):
+        """构建资产准备表 → Krea2 JSON 标签页。"""
+        # 文件列表区域
+        file_frame = ttk.LabelFrame(parent, text="美术资产准备表 MD 文件")
+        file_frame.pack(fill=tk.X, padx=10, pady=(10, 5))
+
+        list_container = ttk.Frame(file_frame)
+        list_container.pack(fill=tk.X, padx=8, pady=4)
+
+        self.krea2_listbox = tk.Listbox(
+            list_container, height=6, selectmode=tk.EXTENDED,
+            font=("Consolas", 9),
+        )
+        krea2_scroll = ttk.Scrollbar(list_container, orient=tk.VERTICAL,
+                                     command=self.krea2_listbox.yview)
+        self.krea2_listbox.configure(yscrollcommand=krea2_scroll.set)
+        self.krea2_listbox.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        krea2_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 按钮行
+        btn_frame = ttk.Frame(file_frame)
+        btn_frame.pack(fill=tk.X, padx=8, pady=(2, 8))
+        ttk.Button(btn_frame, text="添加文件",
+                   command=self._krea2_add_files).pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Button(btn_frame, text="删除选中",
+                   command=self._krea2_remove_selected).pack(side=tk.LEFT, padx=4)
+        ttk.Button(btn_frame, text="清空",
+                   command=self._krea2_clear).pack(side=tk.LEFT, padx=4)
+
+        # 输出目录
+        out_frame = ttk.LabelFrame(parent, text="输出目录（Krea2 JSON 工作流文件）")
+        out_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        out_container = ttk.Frame(out_frame)
+        out_container.pack(fill=tk.X, padx=8, pady=8)
+        ttk.Label(out_container, text="输出目录:").pack(side=tk.LEFT)
+        self.krea2_output_entry = ttk.Entry(out_container)
+        self.krea2_output_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 4))
+        ttk.Button(out_container, text="浏览",
+                   command=self._krea2_browse_output).pack(side=tk.LEFT)
+
+        # 说明文字
+        info_frame = ttk.LabelFrame(parent, text="说明")
+        info_frame.pack(fill=tk.X, padx=10, pady=5)
+        info_text = (
+            "读取「美术资产准备表 MD」，自动生成 Krea2 ComfyUI 工作流 JSON：\n"
+            "  • 角色资产 → identity_edit 锁脸多景别工作流（需参考图路径 + 角色 LoRA）\n"
+            "  • 场景资产 → txt2img 批量文生图工作流（easy promptLine 批量提示词）\n"
+            "  • 道具资产 → txt2img 单图设定图工作流\n"
+            "生成的 JSON 可直接拖入 ComfyUI 加载执行。"
+        )
+        ttk.Label(info_frame, text=info_text, justify=tk.LEFT,
+                  font=("Microsoft YaHei UI", 9)).pack(padx=8, pady=8)
+
+        # 开始按钮
+        self.krea2_run_btn = tk.Button(
+            parent, text="开始生成 Krea2 JSON", height=2,
+            font=("Microsoft YaHei UI", 12, "bold"),
+            bg="#4a90d9", fg="white",
+            activebackground="#5ba0e9", activeforeground="white",
+            disabledforeground="#cccccc",
+            command=self._krea2_start,
+        )
+        self.krea2_run_btn.pack(fill=tk.X, padx=20, pady=10)
+
+        # 日志区域
+        log_frame = ttk.LabelFrame(parent, text="日志")
+        log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(5, 10))
+        self.krea2_log = scrolledtext.ScrolledText(
+            log_frame, height=12, font=("Consolas", 9),
+            state=tk.DISABLED, wrap=tk.WORD,
+        )
+        self.krea2_log.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+
+    def _krea2_add_files(self):
+        """添加 MD 文件（支持多选）。"""
+        files = filedialog.askopenfilenames(
+            title="选择美术资产准备表 MD 文件",
+            filetypes=[("Markdown 文件", "*.md"), ("所有文件", "*.*")],
+        )
+        if not files:
+            return
+        existing = set(self.krea2_listbox.get(0, tk.END))
+        for f in files:
+            if f not in existing:
+                self.krea2_listbox.insert(tk.END, f)
+
+    def _krea2_remove_selected(self):
+        """删除 Listbox 中选中的项。"""
+        selected = list(self.krea2_listbox.curselection())
+        for i in reversed(selected):
+            self.krea2_listbox.delete(i)
+
+    def _krea2_clear(self):
+        """清空 MD 文件列表。"""
+        self.krea2_listbox.delete(0, tk.END)
+
+    def _krea2_browse_output(self):
+        """浏览选择输出目录。"""
+        d = filedialog.askdirectory(title="选择 Krea2 JSON 输出目录")
+        if d:
+            self.krea2_output_entry.delete(0, tk.END)
+            self.krea2_output_entry.insert(0, d)
+
+    def _krea2_start(self):
+        """启动资产准备表 → Krea2 JSON 处理（后台线程）。"""
+        if self.asset_krea2_module is None:
+            messagebox.showerror("错误", "asset_md_to_krea2_json.py 模块未加载，无法执行。")
+            return
+
+        files = list(self.krea2_listbox.get(0, tk.END))
+        if not files:
+            messagebox.showwarning("提示", "请先添加至少一个 MD 文件。")
+            return
+
+        output_dir = self.krea2_output_entry.get().strip()
+        if not output_dir:
+            messagebox.showwarning("提示", "请选择输出目录。")
+            return
+
+        # 禁用按钮，防止重复点击
+        self.krea2_run_btn.configure(state=tk.DISABLED)
+
+        # 启动后台线程
+        thread = threading.Thread(
+            target=self._krea2_worker, args=(files, output_dir), daemon=True,
+        )
+        thread.start()
+
+    def _krea2_worker(self, md_files, output_dir):
+        """后台线程：执行资产准备表 MD → Krea2 JSON 转换。"""
+        log = lambda msg: self._log("krea2", msg)
+        total_chars, total_scenes, total_props = 0, 0, 0
+        total_files = []
+
+        try:
+            log(f"=== 开始处理: {len(md_files)} 个 MD 文件 ===")
+            log(f"输出目录: {output_dir}")
+            log("")
+
+            for i, md_path in enumerate(md_files, 1):
+                log(f"[{i}/{len(md_files)}] {Path(md_path).name}")
+                try:
+                    result = self.asset_krea2_module.process_single(md_path, output_dir)
+                    total_chars += result["characters"]
+                    total_scenes += result["scenes"]
+                    total_props += result["props"]
+                    total_files.extend(result["files"])
+                except Exception as e:
+                    log(f"  [错误] {e}")
+                    import traceback
+                    log(traceback.format_exc())
+                log("")
+
+            log(f"=== 完成: 共生成 {len(total_files)} 个 JSON ===")
+            log(f"  角色: {total_chars}, 场景: {total_scenes}, 道具: {total_props}")
+
+        except Exception as e:
+            log(f"\n[错误] 处理过程中发生异常: {e}")
+            import traceback
+            log(traceback.format_exc())
+
+        finally:
+            self.log_queue.put(("done", "krea2", len(total_files), 0))
+
     # ── 公共方法 ──
 
     def _log(self, tab, msg):
@@ -1153,6 +1335,7 @@ class H3ToolsApp:
             "asset": getattr(self, "asset_log", None),
             "json": getattr(self, "json_log", None),
             "pt": getattr(self, "pt_log", None),
+            "krea2": getattr(self, "krea2_log", None),
         }
         return mapping.get(tab)
 
@@ -1204,6 +1387,9 @@ class H3ToolsApp:
             title = "Excel → JSON 完成"
         elif tab == "pt":
             title = ".pt 元数据读取完成"
+        elif tab == "krea2":
+            self.krea2_run_btn.configure(state=tk.NORMAL)
+            title = "资产准备表 → Krea2 JSON 完成"
         else:
             return
 
