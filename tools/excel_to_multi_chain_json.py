@@ -5,7 +5,7 @@ excel_to_multi_chain_json.py
 提示词审阅表 Excel → 多链生产 JSON
 
 读取用户审阅后的提示词审阅表 Excel，按主角色分组生成多链预编码 JSON。
-同一图片只 Load 一次，连到多个 MiniMaxH3ReferenceToVideo（合并 LoadImage）。
+同一图片只 Load 一次，连到多个 H3EncodeConditioning（合并 LoadImage）。
 
 用法:
     python excel_to_multi_chain_json.py <审阅表.xlsx> <输出目录> [--by-shot]
@@ -193,7 +193,12 @@ def rewrite_prompt(prompt, char, scene, prop, sup_chars):
 # ── 多链 JSON 生成 ───────────────────────────────────────────────────
 
 def build_shared_nodes(idgen, resolution=0.5):
-    """创建循环体外共享节点，返回节点列表和输出引用。"""
+    """创建循环体外共享节点，返回节点列表和输出引用。
+
+    拆解模式（H3EncodeConditioning）：
+    - 预编码只做 CLIP 编码，不需要 Video VAE / Audio VAE / ResolutionSelector
+    - VAE 编码与分辨率由生成阶段 H3ReencodeFromCache 处理
+    """
     nodes = []
 
     # CLIPLoader
@@ -206,44 +211,8 @@ def build_shared_nodes(idgen, resolution=0.5):
         color="#322", bgcolor="#533",
     ))
 
-    # VAELoader (Video)
-    vae_v_id = idgen.node()
-    nodes.append(make_node(
-        vae_v_id, "VAELoader", "Video VAE",
-        [-1800, -300], [300, 82],
-        widgets_values=[VIDEO_VAE],
-        outputs=[make_output("VAE", "VAE", links=[], slot=0)],
-        color="#322", bgcolor="#533",
-    ))
-
-    # VAELoader (Audio)
-    vae_a_id = idgen.node()
-    nodes.append(make_node(
-        vae_a_id, "VAELoader", "Audio VAE",
-        [-1800, -200], [300, 82],
-        widgets_values=[AUDIO_VAE],
-        outputs=[make_output("VAE", "VAE", links=[], slot=0)],
-        color="#322", bgcolor="#533",
-    ))
-
-    # ResolutionSelector (共享，全组一个)
-    res_id = idgen.node()
-    nodes.append(make_node(
-        res_id, "ResolutionSelector", f"Resolution (Shared, {resolution})",
-        [-1800, -100], [300, 82],
-        widgets_values=["16:9 (Widescreen)", float(resolution), 32],
-        outputs=[
-            make_output("width", "INT", links=[], slot=0),
-            make_output("height", "INT", links=[], slot=1),
-        ],
-        color="#322", bgcolor="#533",
-    ))
-
     refs = {
         "clip_id": clip_id, "clip_out": 0,
-        "vae_v_id": vae_v_id, "vae_v_out": 0,
-        "vae_a_id": vae_a_id, "vae_a_out": 0,
-        "res_id": res_id, "res_w_out": 0, "res_h_out": 1,
     }
     return nodes, refs
 
@@ -320,7 +289,7 @@ def _extract_number(val, default):
 
 
 def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset, y_offset):
-    """为单个镜头创建一条链：easy promptLine → MiniMaxH3ReferenceToVideo → H3SaveConditioning。"""
+    """为单个镜头创建一条链：easy promptLine → H3EncodeConditioning → H3SaveConditioning。"""
     nodes = []
     links = []
 
@@ -348,24 +317,6 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     )
     nodes.append(dur_node)
 
-    # ── Per-shot ComfyMathExpression (frame count) ──
-    math_id = idgen.node()
-    math_link_id = idgen.link()
-    math_node = make_node(
-        math_id, "ComfyMathExpression", f"Frame Count ({shot_id})",
-        [x_offset - 600, y_offset + 100], [300, 82],
-        inputs=[make_input("values.a", "FLOAT", link=math_link_id)],
-        widgets_values=["max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17"],
-        outputs=[
-            make_output("FLOAT", "FLOAT", links=[], slot=0),
-            make_output("INT", "INT", links=[], slot=1),
-            make_output("BOOL", "BOOL", links=[], slot=2),
-        ],
-        color="#322", bgcolor="#533",
-    )
-    nodes.append(math_node)
-    links.append([math_link_id, dur_id, 0, math_id, 0, "FLOAT"])
-
     # ── easy promptLine ──
     pl_id = idgen.node()
     raw_prompt = shot.get("完整提示词", "")
@@ -388,182 +339,121 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     )
     nodes.append(pl_node)
 
-    # ── MiniMaxH3ReferenceToVideo ──
-    r2v_id = idgen.node()
+    # ── H3EncodeConditioning (CLIP-only 预编码，无 VAE、无分辨率) ──
+    enc_id = idgen.node()
 
-    # 构建 ref_image 输入
-    r2v_inputs = []
+    # 构建 ref_image 输入（与 H3SaveConditioning 共享同一 LoadImage 源）
+    enc_inputs = []
+    ref_image_links = {}  # index -> link_id，供 H3SaveConditioning 复用同一来源
     # ref_image_0 (主角色)
     if char and char != "(纯场景)":
         ln = load_nodes.get(("char", char))
         if ln:
             lid = idgen.link()
-            r2v_inputs.append(make_input("ref_images.ref_image_0", "IMAGE", link=lid))
-            links.append([lid, ln, 0, r2v_id, SLOT_INPUT[0], "IMAGE"])
+            enc_inputs.append(make_input("ref_image_0", "IMAGE", link=lid))
+            links.append([lid, ln, 0, enc_id, 2, "IMAGE"])
+            ref_image_links[0] = (ln, lid)
         else:
-            r2v_inputs.append(make_input("ref_images.ref_image_0", "IMAGE", link=None))
+            enc_inputs.append(make_input("ref_image_0", "IMAGE", link=None))
     else:
-        r2v_inputs.append(make_input("ref_images.ref_image_0", "IMAGE", link=None))
+        enc_inputs.append(make_input("ref_image_0", "IMAGE", link=None))
 
     # ref_image_1 (场景)
     if scene:
         ln = load_nodes.get(("scene", scene))
         if ln:
             lid = idgen.link()
-            r2v_inputs.append(make_input("ref_images.ref_image_1", "IMAGE", link=lid))
-            links.append([lid, ln, 0, r2v_id, SLOT_INPUT[1], "IMAGE"])
+            enc_inputs.append(make_input("ref_image_1", "IMAGE", link=lid))
+            links.append([lid, ln, 0, enc_id, 3, "IMAGE"])
+            ref_image_links[1] = (ln, lid)
         else:
-            r2v_inputs.append(make_input("ref_images.ref_image_1", "IMAGE", link=None))
+            enc_inputs.append(make_input("ref_image_1", "IMAGE", link=None))
     else:
-        r2v_inputs.append(make_input("ref_images.ref_image_1", "IMAGE", link=None))
+        enc_inputs.append(make_input("ref_image_1", "IMAGE", link=None))
 
     # ref_image_2 (道具)
     if prop:
         ln = load_nodes.get(("prop", prop))
         if ln:
             lid = idgen.link()
-            r2v_inputs.append(make_input("ref_images.ref_image_2", "IMAGE", link=lid))
-            links.append([lid, ln, 0, r2v_id, SLOT_INPUT[2], "IMAGE"])
+            enc_inputs.append(make_input("ref_image_2", "IMAGE", link=lid))
+            links.append([lid, ln, 0, enc_id, 4, "IMAGE"])
+            ref_image_links[2] = (ln, lid)
         else:
-            r2v_inputs.append(make_input("ref_images.ref_image_2", "IMAGE", link=None))
+            enc_inputs.append(make_input("ref_image_2", "IMAGE", link=None))
     else:
-        r2v_inputs.append(make_input("ref_images.ref_image_2", "IMAGE", link=None))
+        enc_inputs.append(make_input("ref_image_2", "IMAGE", link=None))
 
-    # ref_video_0 (参考视频)
-    ref_video = shot.get("参考视频", "")
-    if ref_video:
-        ln = load_nodes.get(("video", ref_video))
-        if ln:
-            lid = idgen.link()
-            r2v_inputs.append(make_input("ref_videos.ref_video_0", "IMAGE", link=lid))
-            links.append([lid, ln, 0, r2v_id, 6, "IMAGE"])
-        else:
-            r2v_inputs.append(make_input("ref_videos.ref_video_0", "IMAGE", link=None))
-    else:
-        r2v_inputs.append(make_input("ref_videos.ref_video_0", "IMAGE", link=None))
-
-    # ref_video_audio_0 (参考视频音频 — 留空，用户可在 ComfyUI 手动连接)
-    r2v_inputs.append(make_input("ref_video_audios.ref_video_audio_0", "AUDIO", link=None))
-
-    # ref_audio_0 (参考音频1)
-    ref_audio1 = shot.get("参考音频1", "")
-    if ref_audio1:
-        ln = load_nodes.get(("audio", ref_audio1))
-        if ln:
-            lid = idgen.link()
-            r2v_inputs.append(make_input("ref_audios.ref_audio_0", "AUDIO", link=lid))
-            links.append([lid, ln, 0, r2v_id, 8, "AUDIO"])
-        else:
-            r2v_inputs.append(make_input("ref_audios.ref_audio_0", "AUDIO", link=None))
-    else:
-        r2v_inputs.append(make_input("ref_audios.ref_audio_0", "AUDIO", link=None))
-
-    # ref_audio_1 (参考音频2)
-    ref_audio2 = shot.get("参考音频2", "")
-    if ref_audio2:
-        ln = load_nodes.get(("audio", ref_audio2))
-        if ln:
-            lid = idgen.link()
-            r2v_inputs.append(make_input("ref_audios.ref_audio_1", "AUDIO", link=lid))
-            links.append([lid, ln, 0, r2v_id, 9, "AUDIO"])
-        else:
-            r2v_inputs.append(make_input("ref_audios.ref_audio_1", "AUDIO", link=None))
-    else:
-        r2v_inputs.append(make_input("ref_audios.ref_audio_1", "AUDIO", link=None))
-
-    # ref_image_3+ (配角)
+    # ref_image_3 (配角)
     pic_idx = 3
     for sup in sup_chars:
         ln = load_nodes.get(("char", sup))
-        if ln and pic_idx in SLOT_INPUT:
+        if ln:
             lid = idgen.link()
-            r2v_inputs.append(make_input(f"ref_images.ref_image_{pic_idx}", "IMAGE", link=lid))
-            links.append([lid, ln, 0, r2v_id, SLOT_INPUT[pic_idx], "IMAGE"])
+            enc_inputs.append(make_input(f"ref_image_{pic_idx}", "IMAGE", link=lid))
+            links.append([lid, ln, 0, enc_id, 2 + pic_idx, "IMAGE"])
+            ref_image_links[pic_idx] = (ln, lid)
         else:
-            r2v_inputs.append(make_input(f"ref_images.ref_image_{pic_idx}", "IMAGE", link=None))
+            enc_inputs.append(make_input(f"ref_image_{pic_idx}", "IMAGE", link=None))
         pic_idx += 1
 
     # CLIP 连接
     clip_lid = idgen.link()
-    r2v_inputs.insert(0, make_input("clip", "CLIP", link=clip_lid))
+    enc_inputs.insert(0, make_input("clip", "CLIP", link=clip_lid))
     links.append([clip_lid, shared_refs["clip_id"], shared_refs["clip_out"],
-                  r2v_id, 0, "CLIP"])
-
-    # VAE Video 连接
-    vae_lid = idgen.link()
-    r2v_inputs.insert(1, make_input("vae", "VAE", link=vae_lid))
-    links.append([vae_lid, shared_refs["vae_v_id"], shared_refs["vae_v_out"],
-                  r2v_id, 1, "VAE"])
-
-    # Audio VAE 连接
-    audio_vae_lid = idgen.link()
-    r2v_inputs.insert(2, make_input("audio_vae", "VAE", link=audio_vae_lid))
-    links.append([audio_vae_lid, shared_refs["vae_a_id"], shared_refs["vae_a_out"],
-                  r2v_id, 2, "VAE"])
-
-    # width 连接 (shared ResolutionSelector)
-    w_lid = idgen.link()
-    r2v_inputs.append(make_input("width", "INT", link=w_lid, widget_name="width"))
-    links.append([w_lid, shared_refs["res_id"], shared_refs["res_w_out"],
-                  r2v_id, 1, "INT"])
-
-    # height 连接 (shared ResolutionSelector)
-    h_lid = idgen.link()
-    r2v_inputs.append(make_input("height", "INT", link=h_lid, widget_name="height"))
-    links.append([h_lid, shared_refs["res_id"], shared_refs["res_h_out"],
-                  r2v_id, 2, "INT"])
+                  enc_id, 0, "CLIP"])
 
     # prompt 连接
     prompt_lid = idgen.link()
-    r2v_inputs.append(make_input("prompt", "STRING", link=prompt_lid))
-    links.append([prompt_lid, pl_id, 0, r2v_id, 2, "STRING"])
+    enc_inputs.insert(1, make_input("prompt", "STRING", link=prompt_lid))
+    links.append([prompt_lid, pl_id, 0, enc_id, 1, "STRING"])
 
-    # length 连接 (per-shot ComfyMathExpression INT output)
-    length_lid = idgen.link()
-    r2v_inputs.append(make_input("length", "INT", link=length_lid, widget_name="length"))
-    links.append([length_lid, math_id, 1, r2v_id, 12, "INT"])
-
-    r2v_outputs = [
-        make_output("positive", "CONDITIONING", links=[], slot=0),
-        make_output("negative", "CONDITIONING", links=[], slot=1),
-        make_output("LATENT", "LATENT", links=[], slot=2),
+    enc_outputs = [
+        make_output("conditioning", "CONDITIONING", links=[], slot=0),
     ]
 
-    r2v_node = make_node(
-        r2v_id, "MiniMaxH3ReferenceToVideo", f"Ref2V ({shot_id})",
+    enc_node = make_node(
+        enc_id, "H3EncodeConditioning", f"Encode ({shot_id})",
         [x_offset, y_offset], [400, 300],
-        inputs=r2v_inputs,
-        outputs=r2v_outputs,
+        inputs=enc_inputs,
+        outputs=enc_outputs,
         widgets_values=[],
     )
-    nodes.append(r2v_node)
+    nodes.append(enc_node)
 
     # ── H3SaveConditioning ──
     save_id = idgen.node()
     save_lid = idgen.link()
-    links.append([save_lid, r2v_id, 0, save_id, 0, "CONDITIONING"])
+    links.append([save_lid, enc_id, 0, save_id, 0, "CONDITIONING"])
 
     # duration 连接 (per-shot PrimitiveFloat)
     save_dur_lid = idgen.link()
     links.append([save_dur_lid, dur_id, 0, save_id, 1, "FLOAT"])
 
-    # width/height 连接 (shared ResolutionSelector)
-    save_w_lid = idgen.link()
-    links.append([save_w_lid, shared_refs["res_id"], shared_refs["res_w_out"],
-                  save_id, 2, "INT"])
-    save_h_lid = idgen.link()
-    links.append([save_h_lid, shared_refs["res_id"], shared_refs["res_h_out"],
-                  save_id, 3, "INT"])
+    save_inputs = [
+        make_input("conditioning", "CONDITIONING", link=save_lid),
+        make_input("duration", "FLOAT", link=save_dur_lid, widget_name="duration"),
+    ]
+
+    # 参考图字节存入 .pt（供生成阶段 H3ReencodeFromCache 重新 VAE 编码）
+    save_ref_inputs = {}
+    for idx, (ln, lid) in ref_image_links.items():
+        if idx >= 4:
+            break
+        save_ref_inputs[idx] = (ln, lid)
+    for idx in range(4):
+        if idx in save_ref_inputs:
+            ln, lid = save_ref_inputs[idx]
+            # 复用 H3EncodeConditioning 已建 link（同一 LoadImage 源可多连）
+            save_inputs.append(make_input(f"ref_image_{idx}", "IMAGE", link=lid))
+            links.append([lid, ln, 0, save_id, 4 + idx, "IMAGE"])
+        else:
+            save_inputs.append(make_input(f"ref_image_{idx}", "IMAGE", link=None))
 
     save_node = make_node(
         save_id, "H3SaveConditioning", f"Save ({shot_id}.pt)",
-        [x_offset + 500, y_offset], [300, 120],
-        inputs=[
-            make_input("conditioning", "CONDITIONING", link=save_lid),
-            make_input("duration", "FLOAT", link=save_dur_lid, widget_name="duration"),
-            make_input("width", "INT", link=save_w_lid, widget_name="width"),
-            make_input("height", "INT", link=save_h_lid, widget_name="height"),
-        ],
+        [x_offset + 500, y_offset], [300, 180],
+        inputs=save_inputs,
         outputs=[],
         widgets_values=[shot_id],
         color="#232", bgcolor="#353",
@@ -681,17 +571,9 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
         if node["type"] == "CLIPLoader" and node["outputs"]:
             clip_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
             node["outputs"][0]["links"] = clip_links
-        elif node["type"] == "VAELoader" and node["title"] == "Video VAE":
-            vae_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
-            node["outputs"][0]["links"] = vae_links
-        elif node["type"] == "VAELoader" and node["title"] == "Audio VAE":
-            vae_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
-            node["outputs"][0]["links"] = vae_links
-        elif node["type"] == "ResolutionSelector":
-            w_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
-            h_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 1]
-            node["outputs"][0]["links"] = w_links
-            node["outputs"][1]["links"] = h_links
+        elif node["type"] == "H3EncodeConditioning" and node["outputs"]:
+            enc_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
+            node["outputs"][0]["links"] = enc_links
         elif node["type"] == "LoadImage":
             img_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
             node["outputs"][0]["links"] = img_links
@@ -701,11 +583,6 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
         elif node["type"] == "PrimitiveFloat":
             fl_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
             node["outputs"][0]["links"] = fl_links
-        elif node["type"] == "ComfyMathExpression":
-            math_float_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
-            math_int_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 1]
-            node["outputs"][0]["links"] = math_float_links
-            node["outputs"][1]["links"] = math_int_links
         elif node["type"] == "easy promptLine":
             pl_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
             if node["outputs"]:
