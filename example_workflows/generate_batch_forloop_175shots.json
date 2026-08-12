@@ -908,7 +908,7 @@
   },
   {
    "id": 19,
-   "type": "H3SaveVideo",
+   "type": "SaveVideo",
    "pos": [
     820,
     -300
@@ -927,33 +927,26 @@
      "link": 28
     },
     {
-     "name": "save_path",
+     "name": "filename_prefix",
      "type": "STRING",
      "link": 18,
      "widget": {
-      "name": "save_path"
+      "name": "filename_prefix"
      }
     }
    ],
-   "outputs": [
-    {
-     "name": "saved_path",
-     "type": "STRING",
-     "links": [
-      29
-     ],
-     "slot_index": 0
-    }
-   ],
+   "outputs": [],
    "properties": {
-    "Node name for S&R": "H3SaveVideo"
+    "Node name for S&R": "SaveVideo",
+    "cnr_id": "comfy-core",
+    "ver": "0.5.1"
    },
    "widgets_values": [
-    "h3_videos"
+    "video/h3_videos",
+    "auto",
+    "auto"
    ],
-   "title": "保存视频 (无预览)",
-   "color": "#232",
-   "bgcolor": "#353"
+   "title": "保存视频 (ComfyUI自带·自动序号)"
   },
   {
    "id": 20,
@@ -978,7 +971,7 @@
     {
      "name": "initial_value1",
      "type": "*",
-     "link": 29
+     "link": null
     }
    ],
    "outputs": [],
@@ -1215,14 +1208,6 @@
    19,
    0,
    "VIDEO"
-  ],
-  [
-   29,
-   19,
-   0,
-   20,
-   1,
-   "STRING"
   ]
  ],
  "groups": [
