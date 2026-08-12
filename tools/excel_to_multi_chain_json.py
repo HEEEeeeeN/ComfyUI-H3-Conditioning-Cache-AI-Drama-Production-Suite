@@ -398,36 +398,36 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
         ln = load_nodes.get(("char", char))
         if ln:
             lid = idgen.link()
-            r2v_inputs.append(make_input("ref_image_0", "IMAGE", link=lid))
+            r2v_inputs.append(make_input("ref_images.ref_image_0", "IMAGE", link=lid))
             links.append([lid, ln, 0, r2v_id, SLOT_INPUT[0], "IMAGE"])
         else:
-            r2v_inputs.append(make_input("ref_image_0", "IMAGE", link=None))
+            r2v_inputs.append(make_input("ref_images.ref_image_0", "IMAGE", link=None))
     else:
-        r2v_inputs.append(make_input("ref_image_0", "IMAGE", link=None))
+        r2v_inputs.append(make_input("ref_images.ref_image_0", "IMAGE", link=None))
 
     # ref_image_1 (场景)
     if scene:
         ln = load_nodes.get(("scene", scene))
         if ln:
             lid = idgen.link()
-            r2v_inputs.append(make_input("ref_image_1", "IMAGE", link=lid))
+            r2v_inputs.append(make_input("ref_images.ref_image_1", "IMAGE", link=lid))
             links.append([lid, ln, 0, r2v_id, SLOT_INPUT[1], "IMAGE"])
         else:
-            r2v_inputs.append(make_input("ref_image_1", "IMAGE", link=None))
+            r2v_inputs.append(make_input("ref_images.ref_image_1", "IMAGE", link=None))
     else:
-        r2v_inputs.append(make_input("ref_image_1", "IMAGE", link=None))
+        r2v_inputs.append(make_input("ref_images.ref_image_1", "IMAGE", link=None))
 
     # ref_image_2 (道具)
     if prop:
         ln = load_nodes.get(("prop", prop))
         if ln:
             lid = idgen.link()
-            r2v_inputs.append(make_input("ref_image_2", "IMAGE", link=lid))
+            r2v_inputs.append(make_input("ref_images.ref_image_2", "IMAGE", link=lid))
             links.append([lid, ln, 0, r2v_id, SLOT_INPUT[2], "IMAGE"])
         else:
-            r2v_inputs.append(make_input("ref_image_2", "IMAGE", link=None))
+            r2v_inputs.append(make_input("ref_images.ref_image_2", "IMAGE", link=None))
     else:
-        r2v_inputs.append(make_input("ref_image_2", "IMAGE", link=None))
+        r2v_inputs.append(make_input("ref_images.ref_image_2", "IMAGE", link=None))
 
     # ref_video_0 (参考视频)
     ref_video = shot.get("参考视频", "")
@@ -477,10 +477,10 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
         ln = load_nodes.get(("char", sup))
         if ln and pic_idx in SLOT_INPUT:
             lid = idgen.link()
-            r2v_inputs.append(make_input(f"ref_image_{pic_idx}", "IMAGE", link=lid))
+            r2v_inputs.append(make_input(f"ref_images.ref_image_{pic_idx}", "IMAGE", link=lid))
             links.append([lid, ln, 0, r2v_id, SLOT_INPUT[pic_idx], "IMAGE"])
         else:
-            r2v_inputs.append(make_input(f"ref_image_{pic_idx}", "IMAGE", link=None))
+            r2v_inputs.append(make_input(f"ref_images.ref_image_{pic_idx}", "IMAGE", link=None))
         pic_idx += 1
 
     # CLIP 连接
