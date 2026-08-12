@@ -1,7 +1,7 @@
 {
  "id": "denghuang-h3-forloop-v4-meta",
  "revision": 0,
- "last_node_id": 20,
+ "last_node_id": 21,
  "last_link_id": 29,
  "nodes": [
   {
@@ -537,17 +537,13 @@
     {
      "name": "width",
      "type": "INT",
-     "links": [
-      19
-     ],
+     "links": null,
      "slot_index": 1
     },
     {
      "name": "height",
      "type": "INT",
-     "links": [
-      20
-     ],
+     "links": null,
      "slot_index": 2
     },
     {
@@ -570,6 +566,51 @@
    "bgcolor": "#353"
   },
   {
+   "id": 21,
+   "type": "ResolutionSelector",
+   "pos": [
+    -150,
+    -420
+   ],
+   "size": [
+    270,
+    170
+   ],
+   "flags": {},
+   "order": 11,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "width",
+     "type": "INT",
+     "links": [
+      30
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "links": [
+      31
+     ],
+     "slot_index": 1
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ResolutionSelector"
+   },
+   "widgets_values": [
+    "16:9 (Widescreen)",
+    0.4,
+    32
+   ],
+   "title": "Resolution Selector (Size)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
    "id": 13,
    "type": "EmptyMiniMaxH3LatentAV",
    "pos": [
@@ -581,13 +622,13 @@
     110
    ],
    "flags": {},
-   "order": 11,
+   "order": 12,
    "mode": 0,
    "inputs": [
     {
      "name": "width",
      "type": "INT",
-     "link": 19,
+     "link": 30,
      "widget": {
       "name": "width"
      }
@@ -595,7 +636,7 @@
     {
      "name": "height",
      "type": "INT",
-     "link": 20,
+     "link": 31,
      "widget": {
       "name": "height"
      }
@@ -627,7 +668,7 @@
     736,
     124
    ],
-   "title": "空 Latent (AV, 元数据驱动)"
+   "title": "空 Latent (AV, Resolution Selector + 元数据帧数)"
   },
   {
    "id": 14,
@@ -1096,17 +1137,17 @@
    "STRING"
   ],
   [
-   19,
-   12,
-   1,
+   30,
+   21,
+   0,
    13,
    0,
    "INT"
   ],
   [
-   20,
-   12,
-   2,
+   31,
+   21,
+   1,
    13,
    1,
    "INT"

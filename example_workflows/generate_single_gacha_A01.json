@@ -1,8 +1,8 @@
 {
  "id": "denghuang-h3-single-gacha-v4-meta",
  "revision": 0,
- "last_node_id": 15,
- "last_link_id": 28,
+ "last_node_id": 16,
+ "last_link_id": 30,
  "nodes": [
   {
    "id": 1,
@@ -344,7 +344,7 @@
     {
      "name": "width",
      "type": "INT",
-     "link": null,
+     "link": 29,
      "widget": {
       "name": "width"
      }
@@ -352,7 +352,7 @@
     {
      "name": "height",
      "type": "INT",
-     "link": null,
+     "link": 30,
      "widget": {
       "name": "height"
      }
@@ -668,6 +668,51 @@
    "title": "保存视频 (无预览)",
    "color": "#232",
    "bgcolor": "#353"
+  },
+  {
+   "id": 16,
+   "type": "ResolutionSelector",
+   "pos": [
+    -1450,
+    -260
+   ],
+   "size": [
+    270,
+    170
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "width",
+     "type": "INT",
+     "links": [
+      29
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "links": [
+      30
+     ],
+     "slot_index": 1
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ResolutionSelector"
+   },
+   "widgets_values": [
+    "16:9 (Widescreen)",
+    0.4,
+    32
+   ],
+   "title": "Resolution Selector (Size)",
+   "color": "#322",
+   "bgcolor": "#533"
   }
  ],
  "links": [
@@ -798,6 +843,22 @@
    15,
    0,
    "VIDEO"
+  ],
+  [
+   29,
+   16,
+   0,
+   9,
+   0,
+   "INT"
+  ],
+  [
+   30,
+   16,
+   1,
+   9,
+   1,
+   "INT"
   ]
  ],
  "groups": [
