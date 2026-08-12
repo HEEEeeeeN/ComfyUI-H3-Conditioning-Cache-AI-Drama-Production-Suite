@@ -235,6 +235,11 @@ class H3EncodeConditioning:
                     "multiline": True,
                     "tooltip": "H3 提示词全文（九分节或 Ref2VA 格式）。",
                 }),
+                "ref_image_short_edge": ("INT", {
+                    "default": 768,
+                    "min": 256, "max": 2048, "step": 128,
+                    "tooltip": "参考图缩放的短边基准（像素）。768=官方默认（快）；越大视觉 token 越多、越慢（2048 约 7 倍耗时）。生成阶段由 H3ReencodeFromCache 按目标分辨率重新编码，此处仅影响 Qwen3VL 理解精度。",
+                }),
             },
             "optional": {
                 "ref_image_0": ("IMAGE", {
@@ -257,15 +262,16 @@ class H3EncodeConditioning:
     FUNCTION = "encode"
     CATEGORY = "H3Cache"
 
-    def encode(self, clip, prompt, ref_image_0=None, ref_image_1=None,
-               ref_image_2=None, ref_image_3=None):
-        # 构造 Qwen3VL 参考图条目（固定 "max" 短边缩放，与生成分辨率无关）
+    def encode(self, clip, prompt, ref_image_short_edge=768, ref_image_0=None,
+               ref_image_1=None, ref_image_2=None, ref_image_3=None):
+        # 构造 Qwen3VL 参考图条目（按短边基准缩放，默认 768 与官方一致；与生成分辨率无关）
+        short_edge = max(256, int(ref_image_short_edge or 768))
         reference_items = []
         for img in (ref_image_0, ref_image_1, ref_image_2, ref_image_3):
             if img is None:
                 continue
             h, w = img.shape[1], img.shape[2]
-            scale = min(1.0, _REF_IMAGE_SHORT_EDGE / min(w, h))
+            scale = min(1.0, short_edge / min(w, h))
             tw = max(_CANVAS_MULTIPLE,
                      round(w * scale / _CANVAS_MULTIPLE) * _CANVAS_MULTIPLE)
             th = max(_CANVAS_MULTIPLE,
@@ -275,8 +281,8 @@ class H3EncodeConditioning:
 
         tokens = clip.tokenize(prompt, minimax_ref_items=reference_items)
         conditioning = clip.encode_from_tokens_scheduled(tokens)
-        print(f"[H3Cache] H3EncodeConditioning: {len(reference_items)} ref image(s) "
-              f"for CLIP encoding (no VAE)")
+        print(f"[H3Cache] H3EncodeConditioning: {len(reference_items)} ref image(s), "
+              f"short_edge={short_edge} (no VAE)")
         return (conditioning,)
 
 
@@ -479,6 +485,78 @@ class H3LoadConditioning:
         meta_str = f" meta={meta}" if meta else ""
         print(f"[H3Cache] loaded conditioning <- {path} ({mb:.1f} MB{meta_str}) -> {device}")
         return (cond,)
+
+
+# ---------------------------------------------------------------------------
+# Node: H3ReadMetaSingle
+# ---------------------------------------------------------------------------
+
+class H3ReadMetaSingle:
+    """按单个 .pt 文件名读取元数据（时长/宽高/帧数）。
+
+    供单链生成 JSON 使用：H3LoadConditioning 加载 conditioning 的同时，
+    用本节点把 .pt 元数据（duration/width/height/frame_count）读出，
+    直接喂给 EmptyMiniMaxH3LatentAV 的 width/height/length，避免手动填参。
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        files = _scan_pt_files()
+        return {
+            "required": {
+                "file_name": (files or [""],),
+            },
+            "optional": {
+                "cache_dir": ("STRING", {
+                    "default": "",
+                    "tooltip": "\u81ea\u5b9a\u4e49\u7f13\u5b58\u76ee\u5f55\uff08\u7edd\u5bf9\u8def\u5f84\uff09\u3002\u7559\u7a7a\u5219\u81ea\u52a8\u641c\u7d22\u3002",
+                }),
+            },
+        }
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, **kwargs):
+        """允许 combo 之外的绝对路径（浏览按钮填入），或列表内相对文件名。"""
+        file_name = kwargs.get("file_name", "")
+        if not file_name:
+            return True
+        if os.path.isabs(file_name):
+            if os.path.isfile(file_name):
+                return True
+            return f"Cache file not found: {file_name}"
+        try:
+            _resolve_cache_path(file_name, kwargs.get("cache_dir", ""))
+            return True
+        except Exception as exc:  # noqa: BLE001
+            return str(exc)
+
+    RETURN_TYPES = ("FLOAT", "INT", "INT", "INT")
+    RETURN_NAMES = ("duration", "width", "height", "frame_count")
+    FUNCTION = "read_meta"
+    CATEGORY = "H3Cache"
+
+    def read_meta(self, file_name, cache_dir=""):
+        if cache_dir is None:
+            cache_dir = ""
+        path = _resolve_cache_path(file_name, cache_dir)
+        data = torch.load(path, map_location="cpu", weights_only=False)
+        _, meta = _extract_conditioning_and_meta(data)
+
+        duration = float(meta.get("duration", 0))
+        width = int(meta.get("width", 0))
+        height = int(meta.get("height", 0))
+        fps = int(meta.get("frame_rate", 24))
+
+        if meta.get("frame_count"):
+            frame_count = int(meta["frame_count"])
+        elif duration > 0:
+            frame_count = _compute_frame_count(duration, fps)
+        else:
+            frame_count = 0
+
+        print(f"[H3Cache] H3ReadMetaSingle {file_name}: duration={duration}s, "
+              f"{width}x{height}, frames={frame_count}")
+        return (duration, width, height, frame_count)
 
 
 # ---------------------------------------------------------------------------
@@ -843,6 +921,7 @@ NODE_CLASS_MAPPINGS = {
     "H3EncodeConditioning": H3EncodeConditioning,
     "H3SaveConditioning": H3SaveConditioning,
     "H3LoadConditioning": H3LoadConditioning,
+    "H3ReadMetaSingle": H3ReadMetaSingle,
     "H3LoadConditioningBatch": H3LoadConditioningBatch,
     "H3ReencodeFromCache": H3ReencodeFromCache,
     "H3FreeMemory": H3FreeMemory,
@@ -853,6 +932,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "H3EncodeConditioning": "H3 Encode Conditioning (CLIP-only, no VAE)",
     "H3SaveConditioning": "H3 Save Conditioning (cache + ref images)",
     "H3LoadConditioning": "H3 Load Conditioning (cache)",
+    "H3ReadMetaSingle": "H3 Read Meta Single (.pt \u5143\u6570\u636e)",
     "H3LoadConditioningBatch": "H3 Load Conditioning Batch (cache)",
     "H3ReencodeFromCache": "H3 Reencode From Cache (cross-resolution)",
     "H3FreeMemory": "H3 Free Memory (\u663e\u5b58/\u5185\u5b58\u6e05\u7406)",
