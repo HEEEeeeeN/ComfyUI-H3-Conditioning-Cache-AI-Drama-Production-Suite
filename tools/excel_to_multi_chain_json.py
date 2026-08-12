@@ -324,19 +324,10 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
         if sc:
             sup_chars.append(sc)
 
-    # ── Per-shot ResolutionSelector ──
-    res_id = idgen.node()
-    res_node = make_node(
-        res_id, "ResolutionSelector", f"Resolution ({shot_id}, {resolution})",
-        [x_offset - 600, y_offset - 100], [300, 82],
-        widgets_values=["16:9 (Widescreen)", float(resolution), 32],
-        outputs=[
-            make_output("width", "INT", links=[], slot=0),
-            make_output("height", "INT", links=[], slot=1),
-        ],
-        color="#322", bgcolor="#533",
-    )
-    nodes.append(res_node)
+    # ── Compute width/height from resolution (16:9, aligned to 32) ──
+    BASE_W, BASE_H = 1280, 720
+    width = int(BASE_W * resolution / 32) * 32
+    height = int(BASE_H * resolution / 32) * 32
 
     # ── Per-shot PrimitiveFloat (duration) ──
     dur_id = idgen.node()
@@ -502,16 +493,6 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     links.append([audio_vae_lid, shared_refs["vae_a_id"], shared_refs["vae_a_out"],
                   r2v_id, 2, "VAE"])
 
-    # width 连接 (per-shot ResolutionSelector)
-    w_lid = idgen.link()
-    r2v_inputs.append(make_input("width", "INT", link=w_lid, widget_name="width"))
-    links.append([w_lid, res_id, 0, r2v_id, 1, "INT"])
-
-    # height 连接 (per-shot ResolutionSelector)
-    h_lid = idgen.link()
-    r2v_inputs.append(make_input("height", "INT", link=h_lid, widget_name="height"))
-    links.append([h_lid, res_id, 1, r2v_id, 2, "INT"])
-
     # prompt 连接
     prompt_lid = idgen.link()
     r2v_inputs.append(make_input("prompt", "STRING", link=prompt_lid))
@@ -533,7 +514,7 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
         [x_offset, y_offset], [400, 300],
         inputs=r2v_inputs,
         outputs=r2v_outputs,
-        widgets_values=[],
+        widgets_values=["", 0, width, height, "match"],
     )
     nodes.append(r2v_node)
 
@@ -551,12 +532,6 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     save_dur_lid = idgen.link()
     links.append([save_dur_lid, dur_id, 0, save_id, 2, "FLOAT"])
 
-    # width/height 连接 (per-shot ResolutionSelector)
-    save_w_lid = idgen.link()
-    links.append([save_w_lid, res_id, 0, save_id, 3, "INT"])
-    save_h_lid = idgen.link()
-    links.append([save_h_lid, res_id, 1, save_id, 4, "INT"])
-
     save_node = make_node(
         save_id, "H3SaveConditioning", f"Save ({shot_id}.pt)",
         [x_offset + 500, y_offset], [300, 120],
@@ -564,11 +539,9 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
             make_input("conditioning", "CONDITIONING", link=save_lid),
             make_input("vae", "VAE", link=save_vae_lid),
             make_input("duration", "FLOAT", link=save_dur_lid, widget_name="duration"),
-            make_input("width", "INT", link=save_w_lid, widget_name="width"),
-            make_input("height", "INT", link=save_h_lid, widget_name="height"),
         ],
         outputs=[],
-        widgets_values=[shot_id],
+        widgets_values=[shot_id, width, height],
         color="#232", bgcolor="#353",
     )
     nodes.append(save_node)
@@ -687,11 +660,6 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
         elif node["type"] == "VAELoader" and node["title"] == "Audio VAE":
             vae_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
             node["outputs"][0]["links"] = vae_links
-        elif node["type"] == "ResolutionSelector":
-            w_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
-            h_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 1]
-            node["outputs"][0]["links"] = w_links
-            node["outputs"][1]["links"] = h_links
         elif node["type"] == "LoadImage":
             img_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
             node["outputs"][0]["links"] = img_links
