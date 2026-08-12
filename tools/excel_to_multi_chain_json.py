@@ -543,29 +543,23 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     save_lid = idgen.link()
     links.append([save_lid, r2v_id, 0, save_id, 0, "CONDITIONING"])
 
-    # VAE 连接到 Save
-    save_vae_lid = idgen.link()
-    links.append([save_vae_lid, shared_refs["vae_v_id"], shared_refs["vae_v_out"],
-                  save_id, 1, "VAE"])
-
     # duration 连接 (per-shot PrimitiveFloat)
     save_dur_lid = idgen.link()
-    links.append([save_dur_lid, dur_id, 0, save_id, 2, "FLOAT"])
+    links.append([save_dur_lid, dur_id, 0, save_id, 1, "FLOAT"])
 
     # width/height 连接 (shared ResolutionSelector)
     save_w_lid = idgen.link()
     links.append([save_w_lid, shared_refs["res_id"], shared_refs["res_w_out"],
-                  save_id, 3, "INT"])
+                  save_id, 2, "INT"])
     save_h_lid = idgen.link()
     links.append([save_h_lid, shared_refs["res_id"], shared_refs["res_h_out"],
-                  save_id, 4, "INT"])
+                  save_id, 3, "INT"])
 
     save_node = make_node(
         save_id, "H3SaveConditioning", f"Save ({shot_id}.pt)",
         [x_offset + 500, y_offset], [300, 120],
         inputs=[
             make_input("conditioning", "CONDITIONING", link=save_lid),
-            make_input("vae", "VAE", link=save_vae_lid),
             make_input("duration", "FLOAT", link=save_dur_lid, widget_name="duration"),
             make_input("width", "INT", link=save_w_lid, widget_name="width"),
             make_input("height", "INT", link=save_h_lid, widget_name="height"),
