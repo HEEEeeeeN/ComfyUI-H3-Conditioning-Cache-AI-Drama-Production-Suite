@@ -1,0 +1,853 @@
+{
+ "id": "denghuang-h3-single-gacha-v4-meta",
+ "revision": 0,
+ "last_node_id": 15,
+ "last_link_id": 28,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "UNETLoader",
+   "pos": [
+    -1800,
+    -420
+   ],
+   "size": [
+    315,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      1
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "UNETLoader"
+   },
+   "widgets_values": [
+    "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+    "default"
+   ],
+   "title": "H3 UNet",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 2,
+   "type": "LoraLoaderModelOnly",
+   "pos": [
+    -1800,
+    -300
+   ],
+   "size": [
+    315,
+    82
+   ],
+   "flags": {},
+   "order": 8,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 1
+    },
+    {
+     "name": "lora_name",
+     "type": "COMBO",
+     "link": null,
+     "widget": {
+      "name": "lora_name"
+     }
+    },
+    {
+     "name": "strength_model",
+     "type": "FLOAT",
+     "link": null,
+     "widget": {
+      "name": "strength_model"
+     }
+    }
+   ],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      2,
+      3
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "LoraLoaderModelOnly"
+   },
+   "widgets_values": [
+    "minimax_h3_turbo_4step_pruned-convertedByAIEverything.safetensors",
+    1.0
+   ],
+   "title": "加速 LoRA",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 3,
+   "type": "VAELoader",
+   "pos": [
+    -1800,
+    -160
+   ],
+   "size": [
+    315,
+    58
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "VAE",
+     "type": "VAE",
+     "links": [
+      4
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAELoader"
+   },
+   "widgets_values": [
+    "minimax_h3_video_vae_fp16.safetensors"
+   ],
+   "title": "Video VAE"
+  },
+  {
+   "id": 4,
+   "type": "VAELoader",
+   "pos": [
+    -1800,
+    -60
+   ],
+   "size": [
+    315,
+    58
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "VAE",
+     "type": "VAE",
+     "links": [
+      5
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAELoader"
+   },
+   "widgets_values": [
+    "minimax_h3_audio_vae_fp32.safetensors"
+   ],
+   "title": "Audio VAE"
+  },
+  {
+   "id": 5,
+   "type": "KSamplerSelect",
+   "pos": [
+    -1800,
+    60
+   ],
+   "size": [
+    315,
+    58
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "SAMPLER",
+     "type": "SAMPLER",
+     "links": [
+      6
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "KSamplerSelect"
+   },
+   "widgets_values": [
+    "res_multistep"
+   ],
+   "title": "采样器 (res_multistep)"
+  },
+  {
+   "id": 6,
+   "type": "BasicScheduler",
+   "pos": [
+    -1800,
+    180
+   ],
+   "size": [
+    315,
+    130
+   ],
+   "flags": {},
+   "order": 9,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 2
+    }
+   ],
+   "outputs": [
+    {
+     "name": "SIGMAS",
+     "type": "SIGMAS",
+     "links": [
+      7
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "BasicScheduler"
+   },
+   "widgets_values": [
+    "simple",
+    6,
+    1.0
+   ],
+   "title": "调度器 (6步 simple)",
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 7,
+   "type": "RandomNoise",
+   "pos": [
+    -1800,
+    320
+   ],
+   "size": [
+    315,
+    82
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "NOISE",
+     "type": "NOISE",
+     "links": [
+      8
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "RandomNoise"
+   },
+   "widgets_values": [
+    0,
+    "randomize"
+   ],
+   "title": "随机噪声 (抽卡换种子)"
+  },
+  {
+   "id": 8,
+   "type": "H3LoadConditioning",
+   "pos": [
+    -1150,
+    -420
+   ],
+   "size": [
+    315,
+    110
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "file_name",
+     "type": "COMBO",
+     "link": null,
+     "widget": {
+      "name": "file_name"
+     }
+    },
+    {
+     "name": "cache_dir",
+     "type": "STRING",
+     "link": null,
+     "widget": {
+      "name": "cache_dir"
+     }
+    }
+   ],
+   "outputs": [
+    {
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      17
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "H3LoadConditioning"
+   },
+   "widgets_values": [
+    "A01.pt",
+    ""
+   ],
+   "title": "加载单个 .pt (抽卡)"
+  },
+  {
+   "id": 9,
+   "type": "EmptyMiniMaxH3LatentAV",
+   "pos": [
+    -1150,
+    -260
+   ],
+   "size": [
+    315,
+    110
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "width",
+     "type": "INT",
+     "link": null,
+     "widget": {
+      "name": "width"
+     }
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "link": null,
+     "widget": {
+      "name": "height"
+     }
+    },
+    {
+     "name": "length",
+     "type": "INT",
+     "link": null,
+     "widget": {
+      "name": "length"
+     }
+    }
+   ],
+   "outputs": [
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      22
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "EmptyMiniMaxH3LatentAV"
+   },
+   "widgets_values": [
+    1280,
+    736,
+    124
+   ],
+   "title": "空 Latent (AV, 手动调参)"
+  },
+  {
+   "id": 10,
+   "type": "BasicGuider",
+   "pos": [
+    -1150,
+    -100
+   ],
+   "size": [
+    315,
+    58
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 3
+    },
+    {
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 17
+    }
+   ],
+   "outputs": [
+    {
+     "name": "GUIDER",
+     "type": "GUIDER",
+     "links": [
+      23
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "BasicGuider"
+   },
+   "widgets_values": [],
+   "title": "Basic Guider"
+  },
+  {
+   "id": 11,
+   "type": "SamplerCustomAdvanced",
+   "pos": [
+    -750,
+    -420
+   ],
+   "size": [
+    315,
+    140
+   ],
+   "flags": {},
+   "order": 10,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "noise",
+     "type": "NOISE",
+     "link": 8
+    },
+    {
+     "name": "guider",
+     "type": "GUIDER",
+     "link": 23
+    },
+    {
+     "name": "sampler",
+     "type": "SAMPLER",
+     "link": 6
+    },
+    {
+     "name": "sigmas",
+     "type": "SIGMAS",
+     "link": 7
+    },
+    {
+     "name": "latent_image",
+     "type": "LATENT",
+     "link": 22
+    }
+   ],
+   "outputs": [
+    {
+     "name": "output",
+     "type": "LATENT",
+     "links": [
+      24,
+      25
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "denoised_output",
+     "type": "LATENT",
+     "links": null,
+     "slot_index": 1
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "SamplerCustomAdvanced"
+   },
+   "widgets_values": [],
+   "title": "采样器 (高级)"
+  },
+  {
+   "id": 12,
+   "type": "VAEDecode",
+   "pos": [
+    -400,
+    -420
+   ],
+   "size": [
+    230,
+    46
+   ],
+   "flags": {},
+   "order": 11,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "samples",
+     "type": "LATENT",
+     "link": 24
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 4
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      26
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAEDecode"
+   },
+   "widgets_values": [],
+   "title": "VAE 解码 (视频)"
+  },
+  {
+   "id": 13,
+   "type": "VAEDecodeAudio",
+   "pos": [
+    -400,
+    -320
+   ],
+   "size": [
+    230,
+    46
+   ],
+   "flags": {},
+   "order": 12,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "samples",
+     "type": "LATENT",
+     "link": 25
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 5
+    }
+   ],
+   "outputs": [
+    {
+     "name": "AUDIO",
+     "type": "AUDIO",
+     "links": [
+      27
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAEDecodeAudio"
+   },
+   "widgets_values": [],
+   "title": "VAE 解码 (音频)"
+  },
+  {
+   "id": 14,
+   "type": "CreateVideo",
+   "pos": [
+    -120,
+    -420
+   ],
+   "size": [
+    270,
+    110
+   ],
+   "flags": {},
+   "order": 13,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 26
+    },
+    {
+     "name": "audio",
+     "type": "AUDIO",
+     "link": 27,
+     "shape": 7
+    }
+   ],
+   "outputs": [
+    {
+     "name": "VIDEO",
+     "type": "VIDEO",
+     "links": [
+      28
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "CreateVideo"
+   },
+   "widgets_values": [
+    24,
+    8
+   ],
+   "title": "合成视频"
+  },
+  {
+   "id": 15,
+   "type": "H3SaveVideo",
+   "pos": [
+    200,
+    -420
+   ],
+   "size": [
+    400,
+    120
+   ],
+   "flags": {},
+   "order": 14,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "video",
+     "type": "VIDEO",
+     "link": 28
+    },
+    {
+     "name": "save_path",
+     "type": "STRING",
+     "link": null,
+     "widget": {
+      "name": "save_path"
+     }
+    }
+   ],
+   "outputs": [
+    {
+     "name": "saved_path",
+     "type": "STRING",
+     "links": null,
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "H3SaveVideo"
+   },
+   "widgets_values": [
+    "h3_videos/A01_抽卡"
+   ],
+   "title": "保存视频 (无预览)",
+   "color": "#232",
+   "bgcolor": "#353"
+  }
+ ],
+ "links": [
+  [
+   1,
+   1,
+   0,
+   2,
+   0,
+   "MODEL"
+  ],
+  [
+   2,
+   2,
+   0,
+   6,
+   0,
+   "MODEL"
+  ],
+  [
+   3,
+   2,
+   0,
+   10,
+   0,
+   "MODEL"
+  ],
+  [
+   4,
+   3,
+   0,
+   12,
+   1,
+   "VAE"
+  ],
+  [
+   5,
+   4,
+   0,
+   13,
+   1,
+   "VAE"
+  ],
+  [
+   6,
+   5,
+   0,
+   11,
+   2,
+   "SAMPLER"
+  ],
+  [
+   7,
+   6,
+   0,
+   11,
+   3,
+   "SIGMAS"
+  ],
+  [
+   8,
+   7,
+   0,
+   11,
+   0,
+   "NOISE"
+  ],
+  [
+   17,
+   8,
+   0,
+   10,
+   1,
+   "CONDITIONING"
+  ],
+  [
+   22,
+   9,
+   0,
+   11,
+   4,
+   "LATENT"
+  ],
+  [
+   23,
+   10,
+   0,
+   11,
+   1,
+   "GUIDER"
+  ],
+  [
+   24,
+   11,
+   0,
+   12,
+   0,
+   "LATENT"
+  ],
+  [
+   25,
+   11,
+   0,
+   13,
+   0,
+   "LATENT"
+  ],
+  [
+   26,
+   12,
+   0,
+   14,
+   0,
+   "IMAGE"
+  ],
+  [
+   27,
+   13,
+   0,
+   14,
+   1,
+   "AUDIO"
+  ],
+  [
+   28,
+   14,
+   0,
+   15,
+   0,
+   "VIDEO"
+  ]
+ ],
+ "groups": [
+  {
+   "id": 1,
+   "title": "模型加载 (共享)",
+   "bounding": [
+    -1850,
+    -480,
+    420,
+    880
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  },
+  {
+   "id": 2,
+   "title": "单镜加载 & 手动调参",
+   "bounding": [
+    -1200,
+    -480,
+    420,
+    620
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  },
+  {
+   "id": 3,
+   "title": "采样 → 解码 → 存盘",
+   "bounding": [
+    -800,
+    -480,
+    1450,
+    620
+   ],
+   "color": "#a33",
+   "flags": {}
+  }
+ ],
+ "config": {},
+ "extra": {
+  "ds": {
+   "scale": 0.6,
+   "offset": [
+    800,
+    400
+   ]
+  },
+  "note": "H3 单镜抽卡 v4 | 手动调参 | 加载单个.pt反复抽 | 6步 | H3SaveVideo(无预览) | 无FreeMemory"
+ },
+ "version": 0.4
+}

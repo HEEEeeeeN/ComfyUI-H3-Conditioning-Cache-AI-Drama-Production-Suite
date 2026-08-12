@@ -75,6 +75,7 @@ flowchart LR
 - [节点文档 / Node Reference](#节点文档--node-reference)
 - [示范工作流 1：多链预编码 / Demo 1: Multi-Chain Pre-Encode](#示范工作流-1多链预编码--demo-1-multi-chain-pre-encode)
 - [示范工作流 2：批量生成 / Demo 2: Batch Generation](#示范工作流-2批量生成--demo-2-batch-generation)
+- [示范工作流 3：单 pt 抽卡 / Demo 3: Single-Shot Gacha](#示范工作流-3单-pt-抽卡--demo-3-single-shot-gacha)
 - [分镜头需求制作指南 / Shot Requirements Guide](#分镜头需求制作指南--shot-requirements-guide)
 - [硬件要求 / Hardware Requirements](#硬件要求--hardware-requirements)
 - [模型清单 / Models](#模型清单--models)
@@ -339,6 +340,43 @@ easy promptLine ──► MiniMaxH3ReferenceToVideo ──► H3SaveConditioning
 - **Metadata-driven**: `H3ReadConditioningMeta` feeds each shot's duration/width/height/frame count into `EmptyMiniMaxH3LatentAV`, so one loop can mix shots of different durations without grouping by duration.
 - **Save by shot name**: `H3ShotNameByIndex` builds `h3_videos/<shot>` and `H3SaveVideo` writes a preview-less MP4.
 - Model & VAE loaders sit outside the loop and load once; the body is a single "fetch → sample → decode → save → free" chain.
+
+---
+
+## 示范工作流 3：单 pt 抽卡 / Demo 3: Single-Shot Gacha
+
+> `example_workflows/generate_single_gacha_A01.json`
+
+**目标**：针对**单个**不满意镜头，加载它对应的单个 `.pt` 缓存，反复换种子抽卡，直到满意。适合导演在批量产出后挑选候选时，对个别镜头单独重抽。
+
+**Goal**: load the single `.pt` cache of one unsatisfactory shot and re-sample it repeatedly with different seeds, until satisfied. Use this to re-draw individual shots after batch production.
+
+结构（单镜，无循环）：
+
+```
+模型加载（共享）：
+ UNETLoader (H3 ref2va int8) ─► LoraLoaderModelOnly (Turbo LoRA)
+ VAELoader (Video VAE) / VAELoader (Audio VAE)
+ KSamplerSelect (res_multistep) / BasicScheduler (6步 simple) / RandomNoise
+
+单镜抽卡：
+ H3LoadConditioning(file_name=A01.pt) ──► BasicGuider ──► SamplerCustomAdvanced
+ EmptyMiniMaxH3LatentAV(width,height,length)  ※ 手动调参，可即时改分辨率/帧数
+ RandomNoise ──► 换种子反复抽
+
+SamplerCustomAdvanced ─► VAEDecode(Video) ─► VAEDecodeAudio(Audio) ─► CreateVideo
+      └─► H3SaveVideo(save_path=h3_videos/A01_抽卡)
+```
+
+- **单镜加载**：用 `H3LoadConditioning` 直接拉取目标镜头（如 `A01.pt`），不再走批量列表。
+- **手动调参**：`EmptyMiniMaxH3LatentAV` 由你手工填宽高/帧数，抽卡时改分辨率、帧数、时长即时生效，无需重跑 32B 编码。
+- **换种子抽卡**：`RandomNoise` 设为 `randomize`，每次采样换一个种子；不满意只动这一镜，不碰其他镜头。
+- **按镜头名存盘**：`H3SaveVideo` 存为 `h3_videos/A01_抽卡.mp4`，与批量产出的镜头区分开。
+
+- **Single-shot load**: `H3LoadConditioning` pulls one target shot (e.g. `A01.pt`) directly, no batch list.
+- **Manual tuning**: `EmptyMiniMaxH3LatentAV` is filled by hand; change resolution/frame count/duration on the fly without re-running the 32B encoder.
+- **Re-draw by seed**: `RandomNoise` set to `randomize`; each run draws a new seed, touching only this shot.
+- **Save by shot name**: `H3SaveVideo` writes `h3_videos/A01_抽卡.mp4`, distinct from batch output.
 
 ---
 
