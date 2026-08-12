@@ -1,5 +1,6 @@
 import os
 import sys
+import asyncio
 import subprocess
 from pathlib import Path
 
@@ -82,5 +83,51 @@ async def launch_h3_tools(request: web.Request) -> web.Response:
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
         )
         return web.json_response({"status": "ok", "pid": proc.pid})
+    except Exception as exc:  # noqa: BLE001
+        return web.json_response({"error": str(exc)}, status=500)
+
+
+# ---------------------------------------------------------------------------
+# Pick .pt file via native file dialog
+#
+# Adds a POST /h3cache/pick_pt route. The frontend "浏览 .pt 文件" button on the
+# H3LoadConditioning node calls this to open a native folder/file picker on the
+# host machine, so users can load a .pt from anywhere, not just the cache dirs.
+# ---------------------------------------------------------------------------
+
+def _pick_pt_file():
+    """Open a native file dialog and return the chosen absolute path (or '')."""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"tkinter 不可用: {exc}") from exc
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    try:
+        path = filedialog.askopenfilename(
+            title="选择 .pt 条件缓存文件",
+            filetypes=[
+                ("PyTorch 缓存", "*.pt"),
+                ("PyTorch 权重", "*.pth"),
+                ("所有文件", "*.*"),
+            ],
+        )
+    finally:
+        try:
+            root.destroy()
+        except Exception:  # noqa: BLE001
+            pass
+    return path or ""
+
+
+@PromptServer.instance.routes.post("/h3cache/pick_pt")
+async def pick_pt(request: web.Request) -> web.Response:
+    """Open the native file dialog to locate a .pt conditioning cache file."""
+    try:
+        path = await asyncio.to_thread(_pick_pt_file)
+        return web.json_response({"path": path})
     except Exception as exc:  # noqa: BLE001
         return web.json_response({"error": str(exc)}, status=500)
