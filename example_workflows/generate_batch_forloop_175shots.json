@@ -908,7 +908,7 @@
   },
   {
    "id": 19,
-   "type": "SaveVideo",
+   "type": "H3SaveVideo",
    "pos": [
     820,
     -300
@@ -927,26 +927,42 @@
      "link": 28
     },
     {
-     "name": "filename_prefix",
+     "name": "save_path",
      "type": "STRING",
      "link": 18,
      "widget": {
-      "name": "filename_prefix"
+      "name": "save_path"
+     }
+    },
+    {
+     "name": "add_counter",
+     "type": "BOOLEAN",
+     "link": null,
+     "widget": {
+      "name": "add_counter"
      }
     }
    ],
-   "outputs": [],
+   "outputs": [
+    {
+     "name": "saved_path",
+     "type": "STRING",
+     "links": [
+      29
+     ],
+     "slot_index": 0
+    }
+   ],
    "properties": {
-    "Node name for S&R": "SaveVideo",
-    "cnr_id": "comfy-core",
-    "ver": "0.5.1"
+    "Node name for S&R": "H3SaveVideo"
    },
    "widgets_values": [
-    "video/h3_videos",
-    "auto",
-    "auto"
+    "h3_videos",
+    true
    ],
-   "title": "保存视频 (ComfyUI自带·自动序号)"
+   "title": "保存视频 (自动序号·不覆盖)",
+   "color": "#232",
+   "bgcolor": "#353"
   },
   {
    "id": 20,
@@ -971,7 +987,7 @@
     {
      "name": "initial_value1",
      "type": "*",
-     "link": null
+     "link": 29
     }
    ],
    "outputs": [],
@@ -1208,6 +1224,14 @@
    19,
    0,
    "VIDEO"
+  ],
+  [
+   29,
+   19,
+   0,
+   20,
+   1,
+   "STRING"
   ]
  ],
  "groups": [

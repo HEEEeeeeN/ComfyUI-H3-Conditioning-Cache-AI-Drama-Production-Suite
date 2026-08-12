@@ -747,6 +747,12 @@ class H3SaveVideo:
                     "default": "h3_videos",
                     "tooltip": "\u4fdd\u5b58\u8def\u5f84\uff08\u76f8\u5bf9\u4e8e output\uff09\uff0c\u5982 h3_videos/A12\u3002",
                 }),
+                "add_counter": ("BOOLEAN", {
+                    "default": True,
+                    "label_on": "\u81ea\u52a8\u5e8f\u53f7 (\u4e0d\u8986\u76d6)",
+                    "label_off": "\u8986\u76d6\u6a21\u5f0f",
+                    "tooltip": "\u5f00\uff1a\u50cf ComfyUI \u539f\u751f\u4e00\u6837\u81ea\u52a8\u52a0 _00001_ \u5e8f\u53f7\uff0c\u91cd\u8dd1\u4e0d\u8986\u76d6\u65e7\u89c6\u9891\uff1b\u5173\uff1a\u76f4\u63a5\u8986\u76d6\u540c\u540d\u6587\u4ef6\u3002",
+                }),
             },
             "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
         }
@@ -757,7 +763,7 @@ class H3SaveVideo:
     OUTPUT_NODE = True
     CATEGORY = "H3Cache"
 
-    def save(self, video, save_path, prompt=None, extra_pnginfo=None):
+    def save(self, video, save_path, add_counter=True, prompt=None, extra_pnginfo=None):
         if video is None:
             print("[H3Cache] H3SaveVideo: video is None, skipping")
             return {"result": ("",)}
@@ -789,7 +795,18 @@ class H3SaveVideo:
         except Exception:
             pass
 
-        filepath = os.path.join(folder, f"{safe_name}.{ext}")
+        # 自动加序号（不覆盖）：与 ComfyUI 原生 SaveVideo 行为一致
+        if add_counter:
+            counter = 1
+            while True:
+                candidate = os.path.join(folder, f"{safe_name}_{counter:05}_.{ext}")
+                if not os.path.isfile(candidate):
+                    break
+                counter += 1
+            filepath = candidate
+        else:
+            filepath = os.path.join(folder, f"{safe_name}.{ext}")
+
         metadata = None
         if extra_pnginfo and isinstance(extra_pnginfo, dict):
             metadata = dict(extra_pnginfo)

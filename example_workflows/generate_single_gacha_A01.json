@@ -624,7 +624,7 @@
   },
   {
    "id": 15,
-   "type": "SaveVideo",
+   "type": "H3SaveVideo",
    "pos": [
     200,
     -420
@@ -641,20 +641,42 @@
      "name": "video",
      "type": "VIDEO",
      "link": 28
+    },
+    {
+     "name": "save_path",
+     "type": "STRING",
+     "link": null,
+     "widget": {
+      "name": "save_path"
+     }
+    },
+    {
+     "name": "add_counter",
+     "type": "BOOLEAN",
+     "link": null,
+     "widget": {
+      "name": "add_counter"
+     }
     }
    ],
-   "outputs": [],
+   "outputs": [
+    {
+     "name": "saved_path",
+     "type": "STRING",
+     "links": null,
+     "slot_index": 0
+    }
+   ],
    "properties": {
-    "Node name for S&R": "SaveVideo",
-    "cnr_id": "comfy-core",
-    "ver": "0.5.1"
+    "Node name for S&R": "H3SaveVideo"
    },
    "widgets_values": [
-    "video/A01_抽卡",
-    "auto",
-    "auto"
+    "h3_videos/A01_抽卡",
+    true
    ],
-   "title": "保存视频 (ComfyUI自带·自动序号)"
+   "title": "保存视频 (自动序号·不覆盖)",
+   "color": "#232",
+   "bgcolor": "#353"
   },
   {
    "id": 16,
