@@ -328,9 +328,7 @@
     {
      "name": "count",
      "type": "INT",
-     "links": [
-      12
-     ],
+     "links": [],
      "slot_index": 2
     }
    ],
@@ -361,7 +359,7 @@
     {
      "name": "total",
      "type": "INT",
-     "link": 12,
+     "link": null,
      "widget": {
       "name": "total"
      }
@@ -1087,14 +1085,6 @@
    12,
    0,
    "H3_COND_NAMES"
-  ],
-  [
-   12,
-   8,
-   2,
-   9,
-   0,
-   "INT"
   ],
   [
    13,

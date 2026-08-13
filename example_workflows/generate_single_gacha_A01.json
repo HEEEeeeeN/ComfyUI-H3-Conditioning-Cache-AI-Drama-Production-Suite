@@ -315,6 +315,32 @@
       17
      ],
      "slot_index": 0
+    },
+    {
+     "name": "duration",
+     "type": "FLOAT",
+     "links": [],
+     "slot_index": 1
+    },
+    {
+     "name": "width",
+     "type": "INT",
+     "links": [],
+     "slot_index": 2
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "links": [],
+     "slot_index": 3
+    },
+    {
+     "name": "frame_count",
+     "type": "INT",
+     "links": [
+      31
+     ],
+     "slot_index": 4
     }
    ],
    "properties": {
@@ -722,75 +748,6 @@
    "title": "Resolution Selector (Size)",
    "color": "#322",
    "bgcolor": "#533"
-  },
-  {
-   "id": 17,
-   "type": "H3ReadMetaSingle",
-   "pos": [
-    -1150,
-    -180
-   ],
-   "size": [
-    315,
-    110
-   ],
-   "flags": {},
-   "order": 5,
-   "mode": 0,
-   "inputs": [
-    {
-     "name": "file_name",
-     "type": "COMBO",
-     "link": null,
-     "widget": {
-      "name": "file_name"
-     }
-    },
-    {
-     "name": "cache_dir",
-     "type": "STRING",
-     "link": null,
-     "widget": {
-      "name": "cache_dir"
-     }
-    }
-   ],
-   "outputs": [
-    {
-     "name": "duration",
-     "type": "FLOAT",
-     "links": [],
-     "slot_index": 0
-    },
-    {
-     "name": "width",
-     "type": "INT",
-     "links": [],
-     "slot_index": 1
-    },
-    {
-     "name": "height",
-     "type": "INT",
-     "links": [],
-     "slot_index": 2
-    },
-    {
-     "name": "frame_count",
-     "type": "INT",
-     "links": [
-      31
-     ],
-     "slot_index": 3
-    }
-   ],
-   "properties": {
-    "Node name for S&R": "H3ReadMetaSingle"
-   },
-   "widgets_values": [
-    "A01.pt",
-    ""
-   ],
-   "title": "读 .pt 元数据 (时长/帧数)"
   }
  ],
  "links": [
@@ -940,8 +897,8 @@
   ],
   [
    31,
-   17,
-   3,
+   8,
+   4,
    9,
    2,
    "INT"

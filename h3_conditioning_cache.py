@@ -489,7 +489,8 @@ class H3LoadConditioning:
         except Exception as exc:  # noqa: BLE001
             return str(exc)
 
-    RETURN_TYPES = ("CONDITIONING",)
+    RETURN_TYPES = ("CONDITIONING", "FLOAT", "INT", "INT", "INT")
+    RETURN_NAMES = ("conditioning", "duration", "width", "height", "frame_count")
     FUNCTION = "load"
     CATEGORY = "H3Cache"
 
@@ -505,7 +506,20 @@ class H3LoadConditioning:
         mb = os.path.getsize(path) / (1024 * 1024)
         meta_str = f" meta={meta}" if meta else ""
         print(f"[H3Cache] loaded conditioning <- {path} ({mb:.1f} MB{meta_str}) -> {device}")
-        return (cond,)
+
+        # 直接从 .pt 元数据输出，供 EmptyMiniMaxH3LatentAV 使用，无需单独读取节点
+        duration = float(meta.get("duration", 0))
+        width = int(meta.get("width", 0))
+        height = int(meta.get("height", 0))
+        fps = int(meta.get("frame_rate", 24))
+        if meta.get("frame_count"):
+            frame_count = int(meta["frame_count"])
+        elif duration > 0:
+            frame_count = _compute_frame_count(duration, fps)
+        else:
+            frame_count = 0
+        print(f"[H3Cache] meta: duration={duration}s, {width}x{height}, frames={frame_count}")
+        return (cond, duration, width, height, frame_count)
 
 
 # ---------------------------------------------------------------------------

@@ -119,7 +119,26 @@ def _read_start_total(dynprompt: Any, open_node_id: Any, fallback: int = 1) -> A
         inputs = node.get("inputs", {})
         if class_type in ("H3ForLoopStart", "H3ForLoopWhileStart"):
             if class_type == "H3ForLoopStart":
-                return inputs.get("total", fallback)
+                total = inputs.get("total", fallback)
+                if is_link is not None and is_link(total):
+                    # total 接了外部链接（如 H3LoadConditioningList.count）。
+                    # 循环展开图里无法引用循环外节点，终止条件会失效导致循环不终止。
+                    # 这里尝试从链接上游节点的 shots 列表推断数量作为兜底。
+                    try:
+                        upstream = dynprompt.get_node(total[0])
+                        if upstream.get("class_type") == "H3LoadConditioningList":
+                            shots = upstream.get("inputs", {}).get("shots", "")
+                            if isinstance(shots, str) and shots.strip():
+                                n = len([s for s in shots.split(",") if s.strip()])
+                                if n > 0:
+                                    _log("警告: total 接了 count 链接，从 shots 列表推断数量 "
+                                         f"= {n}。建议直接在 total 填数值更可靠。")
+                                    return n
+                    except Exception:
+                        pass
+                    _log("警告: total 是外部链接且无法解析数值，循环终止条件可能失效。"
+                         "请在 H3ForLoopStart 的 total 填入实际镜头数(数值)。")
+                return total
             return inputs.get("condition", fallback)
     return fallback
 
