@@ -128,12 +128,16 @@ def _read_start_total(dynprompt: Any, open_node_id: Any, fallback: int = 1) -> A
                         upstream = dynprompt.get_node(total[0])
                         if upstream.get("class_type") == "H3LoadConditioningList":
                             shots = upstream.get("inputs", {}).get("shots", "")
-                            if isinstance(shots, str) and shots.strip():
+                            if isinstance(shots, str):
                                 n = len([s for s in shots.split(",") if s.strip()])
-                                if n > 0:
-                                    _log("警告: total 接了 count 链接，从 shots 列表推断数量 "
-                                         f"= {n}。建议直接在 total 填数值更可靠。")
-                                    return n
+                            elif isinstance(shots, (list, tuple)):
+                                n = len([s for s in shots if str(s).strip()])
+                            else:
+                                n = 0
+                            if n > 0:
+                                _log("警告: total 接了 count 链接，从 shots 列表推断数量 "
+                                     f"= {n}。建议直接在 total 填数值更可靠。")
+                                return n
                     except Exception:
                         pass
                     _log("警告: total 是外部链接且无法解析数值，循环终止条件可能失效。"
@@ -465,18 +469,21 @@ class H3ForLoopEnd:
 # Batch load all .pt into a single list, then index into it inside the loop
 # ---------------------------------------------------------------------------
 class H3LoadConditioningList:
-    """Load every cached .pt into one H3_COND_BATCH list (NOT ComfyUI's batch
-    sockets). Inside a for loop, pair this with H3ConditioningIndex to pull the
-    current shot by index. Leave `shots` empty to load everything found."""
+    """Load selected cached .pt files into one H3_COND_BATCH list (NOT ComfyUI's
+    batch sockets). Inside a for loop, pair this with H3ConditioningIndex to pull
+    the current shot by index. Select .pt files from the multi-select dropdown;
+    leave empty to load every .pt found in the cache dirs."""
 
     @classmethod
     def INPUT_TYPES(cls):
+        files = _scan_pt_files()
         return {
             "required": {
-                "shots": ("STRING", {
-                    "default": "",
-                    "multiline": True,
-                    "tooltip": "逗号分隔的镜头名，例如 A01,A02,A03。留空则加载缓存目录下全部 .pt。",
+                "shots": ("COMBO", {
+                    "multiselect": True,
+                    "default": [],
+                    "options": files or [""],
+                    "tooltip": "选择要加载的 .pt 文件（可多选，支持搜索过滤）。留空则加载缓存目录下全部 .pt。",
                 }),
             },
             "optional": {
@@ -495,7 +502,13 @@ class H3LoadConditioningList:
     def load(self, shots, cache_dir=""):
         if cache_dir is None:
             cache_dir = ""
-        names = [s.strip() for s in (shots or "").split(",") if s.strip()]
+        # shots 可能是多选列表、逗号字符串或 None
+        if isinstance(shots, str):
+            names = [s.strip() for s in shots.split(",") if s.strip()]
+        elif isinstance(shots, (list, tuple)):
+            names = [str(s).strip() for s in shots if str(s).strip()]
+        else:
+            names = []
         if not names:
             names = [os.path.splitext(n)[0] for n in _scan_pt_files()]
 
@@ -511,6 +524,7 @@ class H3LoadConditioningList:
             mb = os.path.getsize(path) / (1024 * 1024)
             _log(f"list loaded {nm} <- {path} ({mb:.1f} MB) -> {device}")
             outs.append(cond)
+        _log(f"list loaded {len(outs)} shot(s)")
         return (outs, names, len(outs))
 
 
