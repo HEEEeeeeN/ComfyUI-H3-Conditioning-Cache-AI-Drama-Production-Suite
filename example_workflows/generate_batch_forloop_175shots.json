@@ -234,10 +234,10 @@
    },
    "widgets_values": [
     "simple",
-    4,
+    6,
     1.0
    ],
-   "title": "调度器 (4步 simple)",
+   "title": "调度器 (6步 simple)",
    "color": "#322",
    "bgcolor": "#533"
   },
@@ -1280,7 +1280,7 @@
     400
    ]
   },
-  "note": "H3 for-循环 v4 元数据驱动 | 175镜 | LoraLoaderModelOnly | 4步 | 元数据自动设定分辨率/帧数 | H3SaveVideo(无预览) | 无FreeMemory | count→total 已连接(防死循环)"
+  "note": "H3 for-循环 v4 元数据驱动 | 175镜 | LoraLoaderModelOnly | 6步 | 元数据自动设定分辨率/帧数 | H3SaveVideo(无预览) | 无FreeMemory | count→total 已连接(防死循环) | 执行导演实测通过(5镜无无限循环)"
  },
  "version": 0.4
 }
