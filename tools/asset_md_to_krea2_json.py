@@ -33,7 +33,7 @@ def parse_md(md_path):
     result = {"global": {}, "characters": [], "scenes": [], "props": []}
 
     # ── Global info ──
-    g_match = re.search(r"##\s*全局信息\s*\n(.*?)(?=##\s)", text, re.DOTALL)
+    g_match = re.search(r"##\s*全局信息\s*\n(.*?)(?=\n##\s)", text, re.DOTALL)
     if g_match:
         for line in g_match.group(1).split("\n"):
             m = re.match(r"-\s*\*\*(.+?)\*\*\s*:\s*(.+)", line.strip())
@@ -42,7 +42,7 @@ def parse_md(md_path):
 
     # ── Asset sections ──
     for asset_type, key in [("角色", "characters"), ("场景", "scenes"), ("道具", "props")]:
-        pattern = rf"##\s*{asset_type}资产\s*\n(.*?)(?=##\s|$)"
+        pattern = rf"##\s*{asset_type}资产\s*\n(.*?)(?=\n##\s|$)"
         section_match = re.search(pattern, text, re.DOTALL)
         if not section_match:
             continue
@@ -153,7 +153,7 @@ def _link(link_id, src_node, src_slot, dst_node, dst_slot, data_type):
 
 def _get_global(parsed, key, default):
     """Get a global config value with fallback."""
-    return parsed["global"].get(key, default)
+    return parsed.get(key, default)
 
 
 # ── 2a. Character (identity_edit 锁脸) ──
@@ -362,7 +362,7 @@ def build_character_json(asset, parsed):
                              {"name": "positive", "type": "CONDITIONING", "link": None},
                              {"name": "negative", "type": "CONDITIONING", "link": None},
                              {"name": "latent_image", "type": "LATENT", "link": None}],
-                     widgets=[0, "randomize", 10, 1, "euler", "simple", 1])
+                     widgets=[0, 10, 1, "euler", "simple", 1])
         n_ks["outputs"] = [{"name": "LATENT", "type": "LATENT", "slot_index": 0, "links": []}]
         nodes.append(n_ks)
 
@@ -673,7 +673,7 @@ def build_scene_json(asset, parsed):
                          {"name": "positive", "type": "CONDITIONING", "link": None},
                          {"name": "negative", "type": "CONDITIONING", "link": None},
                          {"name": "latent_image", "type": "LATENT", "link": None}],
-                 widgets=[0, "randomize", 8, 1, "euler_ancestral", "simple", 1],
+                 widgets=[0, 8, 1, "euler_ancestral", "simple", 1],
                  color="#2a2", bgcolor="#040")
     n_ks["outputs"] = [{"name": "LATENT", "type": "LATENT", "slot_index": 0, "links": []}]
     nodes.append(n_ks)

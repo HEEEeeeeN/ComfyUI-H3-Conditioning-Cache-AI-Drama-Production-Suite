@@ -33,7 +33,7 @@
     "Node name for S&R": "UNETLoader"
    },
    "widgets_values": [
-    "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+    "h3\\minimax_h3_ref2va_pruned_int8_convrot.safetensors",
     "default"
    ],
    "title": "H3 UNet",
@@ -92,7 +92,7 @@
     "Node name for S&R": "LoraLoaderModelOnly"
    },
    "widgets_values": [
-    "minimax_h3_turbo_4step_pruned-convertedByAIEverything.safetensors",
+    "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
     1.0
    ],
    "title": "加速 LoRA",
@@ -234,10 +234,10 @@
    },
    "widgets_values": [
     "simple",
-    6,
+    4,
     1.0
    ],
-   "title": "调度器 (6步 simple)",
+   "title": "调度器 (4步 simple)",
    "color": "#322",
    "bgcolor": "#533"
   },
@@ -328,7 +328,9 @@
     {
      "name": "count",
      "type": "INT",
-     "links": [],
+     "links": [
+      12
+     ],
      "slot_index": 2
     }
    ],
@@ -359,7 +361,7 @@
     {
      "name": "total",
      "type": "INT",
-     "link": null,
+     "link": 12,
      "widget": {
       "name": "total"
      }
@@ -1221,6 +1223,14 @@
    20,
    1,
    "STRING"
+  ],
+  [
+   12,
+   8,
+   2,
+   9,
+   0,
+   "INT"
   ]
  ],
  "groups": [
@@ -1270,7 +1280,7 @@
     400
    ]
   },
-  "note": "H3 for-循环 v4 元数据驱动 | 175镜 | LoraLoaderModelOnly | 6步 | 元数据自动设定分辨率/帧数 | H3SaveVideo(无预览) | 无FreeMemory"
+  "note": "H3 for-循环 v4 元数据驱动 | 175镜 | LoraLoaderModelOnly | 4步 | 元数据自动设定分辨率/帧数 | H3SaveVideo(无预览) | 无FreeMemory | count→total 已连接(防死循环)"
  },
  "version": 0.4
 }
