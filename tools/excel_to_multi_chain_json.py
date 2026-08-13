@@ -217,6 +217,21 @@ def build_shared_nodes(idgen, resolution=0.5):
     return nodes, refs
 
 
+def _clean_name(name):
+    """从复合名称中提取纯名称，去除非法文件名字符。
+    
+    Excel 中的资产名可能包含 | 分隔的附加信息（如场景参考、道具参考），
+    以及 Markdown 粗体标记 **。本函数提取纯名称并替换非法字符。
+    """
+    if not name:
+        return name
+    name = re.sub(r'\*\*', '', name)
+    if '|' in name:
+        name = name.split('|')[0].strip()
+    name = re.sub(r'[\\/:*?"<>|]', '_', name)
+    return name.strip()
+
+
 def build_loadimage(idgen, asset_name, image_path, x, y):
     """创建一个 LoadImage 节点。"""
     nid = idgen.node()
@@ -296,13 +311,13 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     shot_id = shot.get("镜头编号", "unknown")
     duration = _extract_number(shot.get("时长", "5"), 5.0)
 
-    # 获取参演资产
-    char = shot.get("参演角色1", "")
-    scene = shot.get("场景设置1", "") or shot.get("场景设置2", "")
-    prop = shot.get("参演道具1", "")
+    # 获取参演资产（清理复合名称，与 generate_group_json 保持一致）
+    char = _clean_name(shot.get("参演角色1", ""))
+    scene = _clean_name(shot.get("场景设置1", "") or shot.get("场景设置2", ""))
+    prop = _clean_name(shot.get("参演道具1", ""))
     sup_chars = []
     for i in [2, 3]:
-        sc = shot.get(f"参演角色{i}", "")
+        sc = _clean_name(shot.get(f"参演角色{i}", ""))
         if sc:
             sup_chars.append(sc)
 
@@ -384,9 +399,13 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     else:
         enc_inputs.append(make_input("ref_image_2", "IMAGE", link=None))
 
-    # ref_image_3 (配角)
+    # ref_image_3 (配角，H3EncodeConditioning 只有 ref_image_0~3，最多接 1 个配角图)
     pic_idx = 3
     for sup in sup_chars:
+        if pic_idx >= 4:
+            print(f"[WARN] {shot_id}: {sup} 无参考图槽位（最多 1 个配角图），"
+                  f"提示词中的 <Picture {pic_idx + 1}> 将无图对应")
+            break
         ln = load_nodes.get(("char", sup))
         if ln:
             lid = idgen.link()
@@ -403,9 +422,9 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     links.append([clip_lid, shared_refs["clip_id"], shared_refs["clip_out"],
                   enc_id, 0, "CLIP"])
 
-    # prompt 连接
+    # prompt 连接（STRING 是 widget 类型，连接时必须标注 widget 名称）
     prompt_lid = idgen.link()
-    enc_inputs.insert(1, make_input("prompt", "STRING", link=prompt_lid))
+    enc_inputs.insert(1, make_input("prompt", "STRING", link=prompt_lid, widget_name="prompt"))
     links.append([prompt_lid, pl_id, 0, enc_id, 1, "STRING"])
 
     enc_outputs = [
@@ -417,8 +436,8 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
         [x_offset, y_offset], [400, 300],
         inputs=enc_inputs,
         outputs=enc_outputs,
-        # widgets 顺序：ref_image_short_edge（clip/prompt 被链接不占位）
-        widgets_values=[768],
+        # widgets 顺序按 INPUT_TYPES 完整列表：prompt(被链接·占位), ref_image_short_edge
+        widgets_values=["", 768],
     )
     nodes.append(enc_node)
 
@@ -437,17 +456,19 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     ]
 
     # 参考图字节存入 .pt（供生成阶段 H3ReencodeFromCache 重新 VAE 编码）
-    save_ref_inputs = {}
-    for idx, (ln, lid) in ref_image_links.items():
+    # 注意：每条连接必须使用唯一的 link ID，不能复用 H3EncodeConditioning 的 link
+    # 且目标 slot 是 save_inputs 数组索引：conditioning=0, duration=1, ref_image_0~3=2~5
+    save_ref_sources = {}
+    for idx, (ln, _lid) in ref_image_links.items():
         if idx >= 4:
             break
-        save_ref_inputs[idx] = (ln, lid)
+        save_ref_sources[idx] = ln
     for idx in range(4):
-        if idx in save_ref_inputs:
-            ln, lid = save_ref_inputs[idx]
-            # 复用 H3EncodeConditioning 已建 link（同一 LoadImage 源可多连）
-            save_inputs.append(make_input(f"ref_image_{idx}", "IMAGE", link=lid))
-            links.append([lid, ln, 0, save_id, 4 + idx, "IMAGE"])
+        if idx in save_ref_sources:
+            ln = save_ref_sources[idx]
+            new_lid = idgen.link()
+            save_inputs.append(make_input(f"ref_image_{idx}", "IMAGE", link=new_lid))
+            links.append([new_lid, ln, 0, save_id, 2 + idx, "IMAGE"])
         else:
             save_inputs.append(make_input(f"ref_image_{idx}", "IMAGE", link=None))
 
@@ -456,9 +477,12 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
         [x_offset + 500, y_offset], [300, 180],
         inputs=save_inputs,
         outputs=[],
-        # widgets 顺序（conditioning/duration/ref_image_* 被链接不占位）：
-        # filename, add_counter, width, height, prompt, ref_image_size, ref_image_format
-        widgets_values=[shot_id, True, 0, 0, "", "match", "jpeg"],
+        # widgets 顺序按 INPUT_TYPES 完整列表（被链接的 widget 仍需占位！）：
+        # filename, add_counter, duration(被链接·占位), width, height,
+        # prompt, ref_image_size, ref_image_format
+        # 前端按完整 widget 顺序应用 widgets_values 后才移除被链接 widget，
+        # 缺占位会导致后续值整体错位（如 height 收到 ''、ref_image_size 收到 'jpeg'）
+        widgets_values=[shot_id, True, 0, 0, 0, "", "match", "jpeg"],
         color="#232", bgcolor="#353",
     )
     nodes.append(save_node)
@@ -486,7 +510,7 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
     load_y = 0
 
     # 主角色（全组共享）
-    main_char = group_shots[0].get("参演角色1", "")
+    main_char = _clean_name(group_shots[0].get("参演角色1", ""))
     if main_char and main_char != "(纯场景)":
         path = asset_paths.get(("角色", main_char), f"{main_char}.png")
         nid, node = build_loadimage(idgen, main_char, path, load_x, load_y)
@@ -498,7 +522,7 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
     seen_scenes = set()
     for shot in group_shots:
         for sk in ["场景设置1", "场景设置2"]:
-            sname = shot.get(sk, "")
+            sname = _clean_name(shot.get(sk, ""))
             if sname and sname not in seen_scenes:
                 seen_scenes.add(sname)
                 path = asset_paths.get(("场景", sname), f"{sname}.png")
@@ -511,7 +535,7 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
     seen_props = set()
     for shot in group_shots:
         for pk in ["参演道具1", "参演道具2", "参演道具3"]:
-            pname = shot.get(pk, "")
+            pname = _clean_name(shot.get(pk, ""))
             if pname and pname not in seen_props:
                 seen_props.add(pname)
                 path = asset_paths.get(("道具", pname), f"{pname}.png")
@@ -524,7 +548,7 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
     seen_sups = set()
     for shot in group_shots:
         for ck in ["参演角色2", "参演角色3"]:
-            cname = shot.get(ck, "")
+            cname = _clean_name(shot.get(ck, ""))
             if cname and cname != main_char and cname not in seen_sups:
                 seen_sups.add(cname)
                 path = asset_paths.get(("角色", cname), f"{cname}.png")
@@ -537,7 +561,7 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
     seen_audios = set()
     for shot in group_shots:
         for ak in ["参考音频1", "参考音频2"]:
-            aname = shot.get(ak, "")
+            aname = _clean_name(shot.get(ak, ""))
             if aname and aname not in seen_audios:
                 seen_audios.add(aname)
                 path = asset_paths.get(("音频", aname), "")
@@ -549,7 +573,7 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
     # 参考视频（去重）
     seen_videos = set()
     for shot in group_shots:
-        vname = shot.get("参考视频", "")
+        vname = _clean_name(shot.get("参考视频", ""))
         if vname and vname not in seen_videos:
             seen_videos.add(vname)
             path = asset_paths.get(("视频", vname), "")
@@ -688,7 +712,7 @@ def process_single(xlsx_path, output_dir, by_shot=False, log=print,
     else:
         groups = {}
         for shot in shots:
-            char = shot.get("参演角色1", "(纯场景)")
+            char = _clean_name(shot.get("参演角色1", "(纯场景)"))
             if not char:
                 char = "(纯场景)"
             groups.setdefault(char, []).append(shot)
