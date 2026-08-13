@@ -417,7 +417,8 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
         [x_offset, y_offset], [400, 300],
         inputs=enc_inputs,
         outputs=enc_outputs,
-        widgets_values=[],
+        # widgets 顺序：ref_image_short_edge（clip/prompt 被链接不占位）
+        widgets_values=[768],
     )
     nodes.append(enc_node)
 
@@ -455,7 +456,9 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
         [x_offset + 500, y_offset], [300, 180],
         inputs=save_inputs,
         outputs=[],
-        widgets_values=[shot_id, True],
+        # widgets 顺序（conditioning/duration/ref_image_* 被链接不占位）：
+        # filename, add_counter, width, height, prompt, ref_image_size, ref_image_format
+        widgets_values=[shot_id, True, 0, 0, "", "match", "jpeg"],
         color="#232", bgcolor="#353",
     )
     nodes.append(save_node)

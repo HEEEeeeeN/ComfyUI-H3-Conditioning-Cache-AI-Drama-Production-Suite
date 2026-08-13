@@ -957,7 +957,6 @@
     "Node name for S&R": "H3SaveVideo"
    },
    "widgets_values": [
-    "h3_videos",
     true
    ],
    "title": "保存视频 (自动序号·不覆盖)",
