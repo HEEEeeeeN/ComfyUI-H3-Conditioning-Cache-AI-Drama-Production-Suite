@@ -31,11 +31,9 @@ import folder_paths
 import comfy.model_management as model_management
 
 try:
-    import nodes as comfy_nodes
     from comfy_execution.graph import ExecutionBlocker
     from comfy_execution.graph_utils import GraphBuilder, is_link
 except Exception:  # pragma: no cover
-    comfy_nodes = None
     ExecutionBlocker = None
     GraphBuilder = None
     is_link = None
@@ -272,36 +270,31 @@ class H3ForLoopWhileEnd:
     RETURN_NAMES = ByPassTypeTuple(tuple([f"值{i}" for i in range(MAX_FLOW_NUM)]))
     FUNCTION = "while_loop_close"
 
-    def explore_dependencies(self, node_id: Any, dynprompt: Any, upstream: dict, parent_ids: list) -> None:
+    def explore_dependencies(self, node_id: Any, dynprompt: Any, upstream: dict) -> None:
+        """从 node_id 向上遍历，建立 parent -> [children] 反向邻接表。
+
+        只记录真实存在的节点，不做任何输出节点/复合 id 的伪造扩展，
+        避免把循环外的共享上游节点（H3LoadConditioningList、模型加载器等）
+        误收进循环体导致每轮克隆翻倍。
+        """
         node_info = dynprompt.get_node(node_id)
         if "inputs" not in node_info:
             return
         for value in node_info["inputs"].values():
             if is_link(value):
                 parent_id = value[0]
-                display_id = dynprompt.get_display_node_id(parent_id)
-                display_node = dynprompt.get_node(display_id)
-                if display_node.get("class_type") not in {"H3ForLoopEnd", "H3ForLoopWhileEnd"}:
-                    parent_ids.append(display_id)
                 if parent_id not in upstream:
                     upstream[parent_id] = []
-                    self.explore_dependencies(parent_id, dynprompt, upstream, parent_ids)
+                    self.explore_dependencies(parent_id, dynprompt, upstream)
                 upstream[parent_id].append(node_id)
 
-    def explore_output_nodes(self, dynprompt: Any, upstream: dict, output_nodes: dict, parent_ids: list) -> None:
-        for parent_id in upstream:
-            display_id = dynprompt.get_display_node_id(parent_id)
-            for output_id, linked_input in output_nodes.items():
-                linked_node_id = linked_input[0]
-                if linked_node_id in parent_ids and display_id == linked_node_id and output_id not in upstream[parent_id]:
-                    if "." in str(parent_id):
-                        parts = str(parent_id).split(".")
-                        parts[-1] = str(output_id)
-                        upstream[parent_id].append(".".join(parts))
-                    else:
-                        upstream[parent_id].append(output_id)
-
     def collect_contained(self, node_id: Any, upstream: dict, contained: dict) -> None:
+        """从 open_node（WhileStart）向下遍历，只收集循环体内部节点。
+
+        循环体 = WhileStart 下游、WhileEnd 上游的节点。共享上游节点
+        （如 H3LoadConditioningList、ResolutionSelector、模型加载器）不是
+        WhileStart 的子节点，天然不会被收集，因此不会被克隆、不会逐轮翻倍。
+        """
         if node_id not in upstream:
             return
         for child_id in upstream[node_id]:
@@ -315,30 +308,15 @@ class H3ForLoopWhileEnd:
             return tuple(kwargs.get(f"initial_value{i}", None) for i in range(MAX_FLOW_NUM))
 
         upstream: dict[Any, list] = {}
-        parent_ids: list[Any] = []
-        self.explore_dependencies(unique_id, dynprompt, upstream, parent_ids)
-        parent_ids = list(set(parent_ids))
+        self.explore_dependencies(unique_id, dynprompt, upstream)
 
-        output_nodes = {}
-        prompts = dynprompt.get_original_prompt()
-        mappings = getattr(comfy_nodes, "NODE_CLASS_MAPPINGS", {}) if comfy_nodes is not None else {}
-        for node_id, node in prompts.items():
-            if "inputs" not in node:
-                continue
-            class_def = mappings.get(node.get("class_type"))
-            if getattr(class_def, "OUTPUT_NODE", False):
-                for value in node["inputs"].values():
-                    if is_link(value):
-                        output_nodes[node_id] = value
-
-        graph = GraphBuilder()
-        self.explore_output_nodes(dynprompt, upstream, output_nodes, parent_ids)
         contained = {}
         open_node = flow[0]
         self.collect_contained(open_node, upstream, contained)
         contained[unique_id] = True
         contained[open_node] = True
 
+        graph = GraphBuilder()
         for node_id in contained:
             original_node = dynprompt.get_node(node_id)
             node = graph.node(original_node["class_type"], "Recurse" if node_id == unique_id else node_id)
