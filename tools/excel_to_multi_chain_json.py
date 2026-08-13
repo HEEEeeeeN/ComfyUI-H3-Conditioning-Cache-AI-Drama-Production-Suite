@@ -232,6 +232,58 @@ def _clean_name(name):
     return name.strip()
 
 
+_PLACEHOLDER_FILE = "h3_placeholder.png"
+
+
+def _candidate_input_dirs():
+    """候选 ComfyUI input 目录列表（脚本独立运行，无法依赖 folder_paths）。"""
+    dirs = []
+    env = os.environ.get("COMFYUI_INPUT_DIR")
+    if env:
+        dirs.append(env)
+    # 常见安装路径
+    dirs.extend([
+        r"F:\02aidraw\ComfyUI-aki-v3\ComfyUI\input",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "input"),
+    ])
+    return [d for d in dirs if d and os.path.isdir(d)]
+
+
+def _ensure_placeholder_image():
+    """确保各候选 input 目录存在占位图 h3_placeholder.png（纯灰，标准库生成）。
+
+    场景/道具资产缺失时，LoadImage 挂这个占位图，避免 ref 槽位缺失，
+    用户在 ComfyUI 中看到灰色占位图后手动替换为真实资产图。
+    """
+    import struct
+    import zlib
+
+    def _png_bytes(size=256):
+        w = h = size
+        row = b"\x00" + b"\x80\x80\x80\xff" * w
+        raw = row * h
+
+        def chunk(typ, data):
+            return (struct.pack(">I", len(data)) + typ + data
+                    + struct.pack(">I", zlib.crc32(typ + data) & 0xFFFFFFFF))
+
+        ihdr = struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0)
+        return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr)
+                + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+    created = []
+    for d in _candidate_input_dirs():
+        target = os.path.join(d, _PLACEHOLDER_FILE)
+        if not os.path.isfile(target):
+            try:
+                with open(target, "wb") as f:
+                    f.write(_png_bytes())
+                created.append(target)
+            except OSError:
+                pass
+    return _PLACEHOLDER_FILE, created
+
+
 def build_loadimage(idgen, asset_name, image_path, x, y):
     """创建一个 LoadImage 节点。"""
     nid = idgen.node()
@@ -373,29 +425,27 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     else:
         enc_inputs.append(make_input("ref_image_0", "IMAGE", link=None))
 
-    # ref_image_1 (场景)
-    if scene:
-        ln = load_nodes.get(("scene", scene))
-        if ln:
-            lid = idgen.link()
-            enc_inputs.append(make_input("ref_image_1", "IMAGE", link=lid))
-            links.append([lid, ln, 0, enc_id, 3, "IMAGE"])
-            ref_image_links[1] = (ln, lid)
-        else:
-            enc_inputs.append(make_input("ref_image_1", "IMAGE", link=None))
+    # ref_image_1 (场景)——找不到真实资产时挂空 load 占位，避免 ref 槽位缺失
+    scene_ln = load_nodes.get(("scene", scene)) if scene else None
+    if scene_ln is None:
+        scene_ln = load_nodes.get(("scene", "__placeholder__"))
+    if scene_ln:
+        lid = idgen.link()
+        enc_inputs.append(make_input("ref_image_1", "IMAGE", link=lid))
+        links.append([lid, scene_ln, 0, enc_id, 3, "IMAGE"])
+        ref_image_links[1] = (scene_ln, lid)
     else:
         enc_inputs.append(make_input("ref_image_1", "IMAGE", link=None))
 
-    # ref_image_2 (道具)
-    if prop:
-        ln = load_nodes.get(("prop", prop))
-        if ln:
-            lid = idgen.link()
-            enc_inputs.append(make_input("ref_image_2", "IMAGE", link=lid))
-            links.append([lid, ln, 0, enc_id, 4, "IMAGE"])
-            ref_image_links[2] = (ln, lid)
-        else:
-            enc_inputs.append(make_input("ref_image_2", "IMAGE", link=None))
+    # ref_image_2 (道具)——找不到真实资产时挂空 load 占位，避免 ref 槽位缺失
+    prop_ln = load_nodes.get(("prop", prop)) if prop else None
+    if prop_ln is None:
+        prop_ln = load_nodes.get(("prop", "__placeholder__"))
+    if prop_ln:
+        lid = idgen.link()
+        enc_inputs.append(make_input("ref_image_2", "IMAGE", link=lid))
+        links.append([lid, prop_ln, 0, enc_id, 4, "IMAGE"])
+        ref_image_links[2] = (prop_ln, lid)
     else:
         enc_inputs.append(make_input("ref_image_2", "IMAGE", link=None))
 
@@ -518,7 +568,8 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
         load_nodes[("char", main_char)] = nid
         load_y += 100
 
-    # 各场景（去重）
+    # 各场景（去重）——组内存在无场景镜头的，挂空 load 占位（__placeholder__），保证 ref 槽位存在
+    placeholder_name, _created = _ensure_placeholder_image()
     seen_scenes = set()
     for shot in group_shots:
         for sk in ["场景设置1", "场景设置2"]:
@@ -530,8 +581,17 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
                 all_nodes.append(node)
                 load_nodes[("scene", sname)] = nid
                 load_y += 100
+    has_scene_gap = any(not _clean_name(shot.get(sk, ""))
+                        for shot in group_shots
+                        for sk in ["场景设置1", "场景设置2"])
+    if has_scene_gap and ("scene", "__placeholder__") not in load_nodes:
+        # 有镜头未配置场景资产，挂占位 LoadImage 供用户后续替换
+        nid, node = build_loadimage(idgen, "场景占位(未配置)", placeholder_name, load_x, load_y)
+        all_nodes.append(node)
+        load_nodes[("scene", "__placeholder__")] = nid
+        load_y += 100
 
-    # 各道具（去重）
+    # 各道具（去重）——组内存在无道具镜头的，挂空 load 占位（__placeholder__），保证 ref 槽位存在
     seen_props = set()
     for shot in group_shots:
         for pk in ["参演道具1", "参演道具2", "参演道具3"]:
@@ -543,6 +603,15 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
                 all_nodes.append(node)
                 load_nodes[("prop", pname)] = nid
                 load_y += 100
+    has_prop_gap = any(not _clean_name(shot.get(pk, ""))
+                       for shot in group_shots
+                       for pk in ["参演道具1", "参演道具2", "参演道具3"])
+    if has_prop_gap and ("prop", "__placeholder__") not in load_nodes:
+        # 有镜头未配置道具资产，挂占位 LoadImage 供用户后续替换
+        nid, node = build_loadimage(idgen, "道具占位(未配置)", placeholder_name, load_x, load_y)
+        all_nodes.append(node)
+        load_nodes[("prop", "__placeholder__")] = nid
+        load_y += 100
 
     # 配角（去重）
     seen_sups = set()
