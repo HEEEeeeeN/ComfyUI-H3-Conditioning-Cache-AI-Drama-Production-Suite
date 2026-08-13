@@ -304,7 +304,7 @@ def _extract_number(val, default):
 
 
 def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset, y_offset):
-    """为单个镜头创建一条链：easy promptLine → H3EncodeConditioning → H3SaveConditioning。"""
+    """为单个镜头创建一条链：PrimitiveStringMultiline → H3EncodeConditioning → H3SaveConditioning。"""
     nodes = []
     links = []
 
@@ -332,25 +332,25 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     )
     nodes.append(dur_node)
 
-    # ── easy promptLine ──
+    # ── PrimitiveStringMultiline (Text Multiline) ──
+    # 注意：不能用 easy promptLine！它会按 \n 把九分节提示词拆成多行 STRING，
+    # ComfyUI 对 list 输入做展开（_async_map_node_over_list），导致
+    # H3EncodeConditioning / H3SaveConditioning 各执行 N 次（行数=执行次数），
+    # 一次运行生成 N 个 .pt。PrimitiveStringMultiline 输出完整字符串不拆分。
     pl_id = idgen.node()
     raw_prompt = shot.get("完整提示词", "")
     rewritten = rewrite_prompt(raw_prompt, char, scene, prop, sup_chars)
 
     pl_node = make_node(
-        pl_id, "easy promptLine", f"H3 Prompt ({shot_id})",
-        [x_offset - 300, y_offset + 520], [500, 300],
+        pl_id, "PrimitiveStringMultiline", f"H3 Prompt ({shot_id})",
+        [x_offset - 300, y_offset + 520], [300, 82],
         inputs=[
-            make_input("prompt", "STRING", link=None),
-            make_input("start_index", "INT", link=None),
-            make_input("max_rows", "INT", link=None),
-            make_input("remove_empty_lines", "BOOLEAN", link=None),
+            make_input("value", "STRING", link=None, widget_name="value"),
         ],
         outputs=[
             make_output("STRING", "STRING", links=[], slot=0),
-            make_output("COMBO", "COMBO", links=[], slot=1),
         ],
-        widgets_values=[rewritten, 0, 1000, True],
+        widgets_values=[rewritten],
     )
     nodes.append(pl_node)
 
@@ -610,7 +610,7 @@ def generate_group_json(group_name, group_shots, asset_paths, output_dir):
         elif node["type"] == "PrimitiveFloat":
             fl_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
             node["outputs"][0]["links"] = fl_links
-        elif node["type"] == "easy promptLine":
+        elif node["type"] in ("PrimitiveStringMultiline", "PrimitiveString"):
             pl_links = [l[0] for l in all_links if l[1] == node["id"] and l[2] == 0]
             if node["outputs"]:
                 node["outputs"][0]["links"] = pl_links
