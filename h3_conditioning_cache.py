@@ -308,6 +308,12 @@ class H3SaveConditioning:
             "required": {
                 "conditioning": ("CONDITIONING",),
                 "filename": ("STRING", {"default": "shot_001"}),
+                "add_counter": ("BOOLEAN", {
+                    "default": True,
+                    "label_on": "\u81ea\u52a8\u5e8f\u53f7 (\u4e0d\u8986\u76d6)",
+                    "label_off": "\u91cd\u65b0\u751f\u6210\u65f6 SKIP",
+                    "tooltip": "\u5f00\uff1a\u76ee\u6807 .pt \u5df2\u5b58\u5728\u65f6\u81ea\u52a8\u751f\u6210 A01_00002_.pt \u4e0d\u8986\u76d6\u3001\u4e0d SKIP\uff1b\u5173\uff1a\u4fdd\u6301\u539f\u884c\u4e3a\uff08\u540c\u540d\u76f4\u63a5 SKIP\uff09\u3002",
+                }),
             },
             "optional": {
                 "duration": ("FLOAT", {
@@ -355,17 +361,32 @@ class H3SaveConditioning:
     OUTPUT_NODE = True
     CATEGORY = "H3Cache"
 
-    def save(self, conditioning, filename, duration=0, width=0, height=0,
-             prompt="", ref_image_size="match", ref_image_format="jpeg",
+    def save(self, conditioning, filename, add_counter=True, duration=0, width=0,
+             height=0, prompt="", ref_image_size="match", ref_image_format="jpeg",
              ref_image_0=None, ref_image_1=None, ref_image_2=None, ref_image_3=None):
         safe = "".join(c for c in filename if c.isalnum() or c in ("_", "-", "."))
         if not safe:
             safe = "shot"
-        path = os.path.join(_cache_dir(), f"{safe}.pt")
-        if os.path.isfile(path):
-            mb = os.path.getsize(path) / (1024 * 1024)
-            print(f"[H3Cache] SKIP (already cached) -> {path} ({mb:.1f} MB)")
-            return {}
+        cache_dir = _cache_dir()
+        base_path = os.path.join(cache_dir, f"{safe}.pt")
+        if os.path.isfile(base_path):
+            if add_counter:
+                # 自动加序号（不覆盖、不 SKIP）：A01.pt -> A01_00001_.pt -> A01_00002_...
+                counter = 1
+                while True:
+                    candidate = os.path.join(
+                        cache_dir, f"{safe}_{counter:05}_.pt")
+                    if not os.path.isfile(candidate):
+                        break
+                    counter += 1
+                path = candidate
+                print(f"[H3Cache] {safe}.pt exists, saving to -> {os.path.basename(path)}")
+            else:
+                mb = os.path.getsize(base_path) / (1024 * 1024)
+                print(f"[H3Cache] SKIP (already cached) -> {base_path} ({mb:.1f} MB)")
+                return {}
+        else:
+            path = base_path
         cond_data = _convert_to_serializable(conditioning)
 
         # Compress reference images

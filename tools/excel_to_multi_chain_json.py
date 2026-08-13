@@ -455,7 +455,7 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
         [x_offset + 500, y_offset], [300, 180],
         inputs=save_inputs,
         outputs=[],
-        widgets_values=[shot_id],
+        widgets_values=[shot_id, True],
         color="#232", bgcolor="#353",
     )
     nodes.append(save_node)
