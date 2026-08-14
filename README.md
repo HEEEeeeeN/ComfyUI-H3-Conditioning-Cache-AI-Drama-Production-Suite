@@ -93,6 +93,8 @@ flowchart LR
 
 一个面向 **AI 动画短剧生产** 的分镜设计与审阅知识库 + 标准流程。它把专业分镜方法论沉淀为可调用的规范，帮助 AI 从剧本出发，设计出既符合叙事规律、又满足 H3 生成可行性的结构化分镜表与视频提示词。该 Skill 沉淀自真实 AI 动画短剧生产实践，公开版已去除未发布作品的敏感设定信息，保留可直接复用的完整方法论。
 
+> **脱敏说明 / Desensitization**：本仓库公开版中，`skills/` 目录已去除项目专用名称（角色名、地名、阵营名等）替换为通用占位词；`example_workflows/`、`tools/`、`docs/` 等生产文件保留内部使用的原始内容，但**文件名**已去除 IP 敏感信息。示例工作流中的参考图路径指向私有美术资产，未随仓库提交，运行前请替换为你自己的资产。
+
 ### 目录结构 / Structure
 
 ```
@@ -281,7 +283,7 @@ These loaders accept a custom absolute `cache_dir`; when empty they search in or
 
 ## 示范工作流 1：多链预编码 / Demo 1: Multi-Chain Pre-Encode
 
-> `example_workflows/preencode_multi_chain_黑猫.json`
+> `example_workflows/preencode_multi_chain_example.json`
 
 **目标**：一个角色（黑猫）属下全部镜头，一次跑完预编码。通过**共享** CLIP / Video VAE / Audio VAE / 分辨率设置压显存——32B 文本编码器只在内存里放一份。
 

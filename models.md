@@ -37,7 +37,7 @@ were made with these exact files:
 
 ## 4. Reference images (not committed)
 
-The pre-encode example `preencode_multi_chain_黑猫.json` references local
+The pre-encode example `preencode_multi_chain_example.json` references local
 images that are part of private artistic assets and are **not** included:
 
 - `h3_ref/角色/黑猫沈天然/沈天然黑猫定妆照.png` (character)
