@@ -216,7 +216,7 @@ The basic format follows the Video Prompt Writing Guide (T2VA / I2VA / FL2VA / L
 
 - Write the body in English. Preserve the original language of dialogue, lyrics, and visible text.
 - `[Shot 1]` marks the opening shot and has no timestamp. Later shots use `[Shot N] At MM:SS.mmm, ...` to mark cut times.
-- Write camera movement as natural English within the current shot, including movement type, amplitude, and speed when they need to be expressed.
+- Write camera movement as a natural English within the current shot, including movement type, amplitude, and speed when they need to be expressed.
 - Give vocal sources stable `(S1)`, `(S2)`, and subsequent IDs. Write dialogue and lyrics as `<d>[Language] ...</d>`.
 - Use `<scenetrans>`, `<cutoff>`, and the corresponding continuity descriptions for dialogue crossing a cut, speech truncated by the video ending, and continuous audio across shots.
 
