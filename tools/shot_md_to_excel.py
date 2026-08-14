@@ -151,7 +151,7 @@ def detect_format(md_path):
           "h3_prompt"（H3提示词，## A01 九分节）或 None。
     """
     text = Path(md_path).read_text(encoding="utf-8", errors="replace")
-    if re.search(r"^##\s+[A-Z]\d+\s*[-—]", text, re.MULTILINE):
+    if re.search(r"^##\s+(?:[A-Z]\d+|镜头\d+)\s*[-—]", text, re.MULTILINE):
         return "h3_prompt"
     if re.search(r"^####\s+镜头\d+", text, re.MULTILINE):
         return "storyboard_v6"
@@ -184,10 +184,16 @@ def parse_h3_prompt_md(md_path):
             continue
         lines = part.splitlines()
         title = lines[0].strip()
+        # 兼容 ## A01 与 ## 镜头N（镜头N 映射为 A编号，如 镜头1→A01、镜头10→A10、镜头243→A243）
         m = re.match(r"^([A-Z]\d+)\s*[-—]\s*(.*)$", title)
         if not m:
-            continue
-        shot_id, shot_name = m.group(1), m.group(2).strip()
+            m = re.match(r"^镜头(\d+)\s*[-—]\s*(.*)$", title)
+            if m:
+                shot_id, shot_name = f"A{int(m.group(1)):02d}", m.group(2).strip()
+            else:
+                continue
+        else:
+            shot_id, shot_name = m.group(1), m.group(2).strip()
 
         shot = {"id": shot_id, "名称": shot_name}
         body = "\n".join(lines[1:])
@@ -216,24 +222,43 @@ def parse_h3_prompt_md(md_path):
 def _h3_asset_from_refs(refs_text, kind):
     """从【参考图约束】中提取指定类型（场景/角色/道具）的资产名。
 
-    匹配格式：`- <图片1> = 场景参考图：金山町山谷...`
-    kind 为 "场景"/"角色"/"道具"，匹配"场景参考图"/"角色参考图"/"道具参考图"。
+    兼容两种格式：
+    - 类型词前置：`- <图片1> = 场景参考图：金山町山谷...`（场景/道具）
+    - 角色名前置：`- <图片2> = 金止戈角色参考图：...` / `- <图片2> = 金止戈（剪影）角色参考图：...`（角色）
+    kind 为 "场景"/"角色"/"道具"。
     """
     if not refs_text:
         return []
     names = []
+    is_role = (kind == "角色")
     for line in refs_text.splitlines():
         line = line.strip()
         if not line.startswith("-"):
             continue
-        # 匹配类型：如 "场景参考图"、"角色参考图"、"道具参考图"
-        pat = rf"=\s*{kind}参考图[：:]\s*(.+?)(?:[，,、]|$|（)"
-        m = re.search(pat, line)
-        if m:
-            name = m.group(1).strip()
-            if name and name not in names:
-                names.append(name)
+        if is_role:
+            # 角色名在"角色参考图"前：`= X角色参考图：`
+            m = re.search(r"=\s*([^：:]+?)\s*角色参考图[：:]", line)
+            if m:
+                name = _strip_bracket(m.group(1).strip())
+                if name and name not in names:
+                    names.append(name)
+        else:
+            # 类型词前置：`= 场景参考图：名称 ...` / `= 道具参考图：名称 ...`
+            m = re.search(rf"=\s*{kind}参考图[：:]\s*([^，,、。．；;]+)", line)
+            if m:
+                name = _strip_bracket(m.group(1).strip())
+                if name and name not in names:
+                    names.append(name)
     return names
+
+
+def _strip_bracket(s):
+    """去掉名称中的括号注释：`金止戈（剪影）` → `金止戈`；`M48坦克（左1/3）` → `M48坦克`。
+    兼容未闭合括号：`金止戈大刀（说明` → `金止戈大刀`；`布口袋）` → `布口袋`。"""
+    s = re.sub(r"[（(][^（）()]*[）)]", "", s)   # 成对括号含内容
+    s = re.sub(r"[（(][^）()]*$", "", s)          # 行尾未闭合左括号段
+    s = re.sub(r"[）)]+$", "", s)                 # 行尾孤立右括号
+    return s.strip()
 
 
 def _h3_parse_time_axis(text):
