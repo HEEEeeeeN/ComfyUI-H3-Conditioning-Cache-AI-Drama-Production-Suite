@@ -4,21 +4,26 @@ Ported from ComfyUI_GJJ_Nodes (gjj_for_loop.py) into this plugin so the H3
 conditioning-cache pipeline does not depend on the GJJ plugin.
 
 The structure mirrors the reference `for.json` workflow:
-    H3LoadConditioningList  (batch: load all .pt into one list)
+    H3LoadConditioningList  (batch: resolve .pt file PATHS only — NO tensors loaded)
                  |
     H3ForLoopStart(total=N) -> index
                  |
-    H3ConditioningIndex(list, index) -> current shot CONDITIONING
+    H3ConditioningIndex(paths, index) -> lazy-load ONE .pt -> CONDITIONING
                  |
           [single processing chain: model already loaded outside]
                  |
     H3ForLoopEnd(flow, ...) -> feeds next round / final output
 
 Loops are expanded at execution time via ComfyUI's GraphBuilder + dynprompt,
-so the loop body (conditioning select -> sample -> decode -> save -> free)
+so the loop body (conditioning load -> sample -> decode -> save -> free)
 is a SINGLE chain that is cloned once per iteration, instead of N parallel
 chains. Model / VAE / CLIP / LoRA loaders stay OUTSIDE the loop and are
 shared across all iterations.
+
+**Lazy loading (VRAM-safe)**: H3LoadConditioningList only resolves file paths
+and returns them as a list — it does NOT load any .pt tensors into memory.
+H3ConditioningIndex loads ONE .pt file per iteration inside the loop body,
+so GPU memory usage stays constant regardless of batch size (400+ shots).
 """
 
 from __future__ import annotations
@@ -447,10 +452,14 @@ class H3ForLoopEnd:
 # Batch load all .pt into a single list, then index into it inside the loop
 # ---------------------------------------------------------------------------
 class H3LoadConditioningList:
-    """Load selected cached .pt files into one H3_COND_BATCH list (NOT ComfyUI's
-    batch sockets). Inside a for loop, pair this with H3ConditioningIndex to pull
-    the current shot by index. Select .pt files from the multi-select dropdown;
-    leave empty to load every .pt found in the cache dirs."""
+    """Resolve selected .pt file paths into a list (does NOT load tensors into
+    memory). Pair with H3ConditioningIndex inside a for loop to load one shot
+    at a time, preventing VRAM exhaustion on large batches (400+ shots).
+    
+    Returns file PATHS (strings) in cond_list, not loaded conditioning tensors.
+    The actual tensor loading happens lazily in H3ConditioningIndex per iteration.
+    Select .pt files from the multi-select dropdown; leave empty to resolve
+    every .pt found in the cache dirs."""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -490,20 +499,18 @@ class H3LoadConditioningList:
         if not names:
             names = [os.path.splitext(n)[0] for n in _scan_pt_files()]
 
-        device = model_management.get_torch_device()
-        outs = []
+        # 只解析文件路径，不加载张量到显存
+        # cond_list 存储的是文件路径字符串，而非 conditioning 张量
+        # 实际张量加载在 H3ConditioningIndex 中按索引懒加载
+        paths = []
         for nm in names:
             fname = nm if nm.endswith(".pt") else nm + ".pt"
             path = _resolve_cache_path(fname, cache_dir)
-            data = torch.load(path, map_location="cpu", weights_only=False)
-            cond_data, meta = _extract_conditioning_and_meta(data)
-            cond = _convert_from_serializable(cond_data)
-            cond = _move_to_device(cond, device)
+            paths.append(path)
             mb = os.path.getsize(path) / (1024 * 1024)
-            _log(f"list loaded {nm} <- {path} ({mb:.1f} MB) -> {device}")
-            outs.append(cond)
-        _log(f"list loaded {len(outs)} shot(s)")
-        return (outs, names, len(outs))
+            _log(f"resolved {nm} <- {path} ({mb:.1f} MB)")
+        _log(f"resolved {len(paths)} shot(s) (lazy: paths only, no tensors loaded)")
+        return (paths, names, len(paths))
 
 
 class H3ShotNameByIndex:
@@ -546,8 +553,15 @@ class H3ShotNameByIndex:
 
 
 class H3ConditioningIndex:
-    """Pull the conditioning at `index` out of an H3_COND_BATCH list. Feed the
-    loop's `当前序号` output into `index` to process one shot per iteration."""
+    """Lazy-load ONE .pt file at the given index and return its conditioning.
+    
+    Takes a list of file paths (from H3LoadConditioningList) and an index,
+    loads only that single .pt file into GPU memory. This prevents VRAM
+    exhaustion when processing large batches (400+ shots): only one
+    conditioning is in GPU memory at any given time, and it is freed after
+    the downstream sampler consumes it.
+    
+    Feed the loop's `当前序号` output into `index` to process one shot per iteration."""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -569,7 +583,28 @@ class H3ConditioningIndex:
         idx = _safe_int(index, 0)
         if idx < 0 or idx >= len(cond_list):
             raise IndexError(f"[H3Cache] 索引 {idx} 超出 cond_list 长度 {len(cond_list)}")
-        return (cond_list[idx],)
+
+        path = cond_list[idx]
+
+        # 兼容旧工作流：如果列表里存的是已加载的 conditioning 张量（dict），
+        # 直接返回；否则按路径懒加载单个 .pt 文件
+        if isinstance(path, dict):
+            _log(f"legacy: cond_list[{idx}] is pre-loaded tensor, returning directly")
+            return (path,)
+
+        # 懒加载：只加载当前索引对应的单个 .pt 文件
+        device = model_management.get_torch_device()
+        data = torch.load(path, map_location="cpu", weights_only=False)
+        cond_data, meta = _extract_conditioning_and_meta(data)
+        cond = _convert_from_serializable(cond_data)
+        cond = _move_to_device(cond, device)
+
+        # 释放原始数据，只保留 conditioning 张量
+        del data
+
+        name = os.path.splitext(os.path.basename(path))[0]
+        _log(f"lazy loaded [{idx}] {name} <- {path} -> {device}")
+        return (cond,)
 
 
 class H3ReadConditioningMeta:

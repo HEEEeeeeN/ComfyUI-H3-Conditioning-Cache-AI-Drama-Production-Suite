@@ -253,8 +253,8 @@ No extra Python dependencies. Everything imported comes from the ComfyUI runtime
 | --- | --- |
 | `H3ForLoopStart` | 循环开始，输出 `循环控制` 与 `当前序号` |
 | `H3ForLoopEnd` | 循环结束，回传值并决定是否展开下一轮 |
-| `H3LoadConditioningList` | 把所有 `.pt` 载入一个 `H3_COND_BATCH` 列表 |
-| `H3ConditioningIndex` | 按 `index` 从列表取当前镜头条件 |
+| `H3LoadConditioningList` | 解析 `.pt` 文件**路径**为列表（不加载张量，VRAM 安全） |
+| `H3ConditioningIndex` | 按 `index` **懒加载**单个 `.pt` 为 conditioning（每轮只加载一个） |
 | `H3ShotNameByIndex` | 按 `index` 取当前镜头名，拼保存路径 |
 | `H3ReadConditioningMeta` | 读 `.pt` 元数据（时长/宽高/帧数），支持混合时长 |
 
@@ -324,8 +324,8 @@ easy promptLine ──► MiniMaxH3ReferenceToVideo ──► H3SaveConditioning
  KSamplerSelect (res_multistep) / BasicScheduler (6步 simple) / RandomNoise
 
 循环体（每条链逐轮展开）：
- H3LoadConditioningList(shots) ──► H3ForLoopStart(total=count) ──► index
-      │  └─► H3ConditioningIndex(list,index) ──► BasicGuider ──► SamplerCustomAdvanced
+ H3LoadConditioningList(shots) ──► paths列表 ──► H3ForLoopStart(total=count) ──► index
+      │  └─► H3ConditioningIndex(paths,index) ──► 懒加载单个.pt ──► BasicGuider ──► SamplerCustomAdvanced
       └─► H3ShotNameByIndex(shot_names,index) ──► H3SaveVideo.save_path
       └─► H3ReadConditioningMeta(shot_names,index)
               └─► EmptyMiniMaxH3LatentAV(width,height,frame_count)  ※ 元数据驱动
@@ -333,6 +333,7 @@ easy promptLine ──► MiniMaxH3ReferenceToVideo ──► H3SaveConditioning
       └─► H3SaveVideo ─► H3ForLoopEnd
 ```
 
+- **懒加载（VRAM 安全）**：`H3LoadConditioningList` 只解析文件路径，不加载张量；`H3ConditioningIndex` 每轮只加载当前索引对应的单个 `.pt` 到 GPU，用完即释放。400+ 镜头批量也不会爆显存。
 - **元数据驱动**：`H3ReadConditioningMeta` 把每镜的时长/宽高/帧数读给 `EmptyMiniMaxH3LatentAV`，因此同一循环可混排不同时长镜头，无需按时长分组。
 - **按镜头名存盘**：`H3ShotNameByIndex` 拼出 `h3_videos/<镜头名>`，`H3SaveVideo` 存为无预览的 MP4。
 - 模型与 VAE 加载器在循环外，只加载一次；循环体内是"取 → 采样 → 解码 → 存 → 清"的单链。
