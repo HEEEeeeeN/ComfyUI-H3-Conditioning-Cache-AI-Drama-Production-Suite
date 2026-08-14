@@ -152,42 +152,153 @@ def read_excel(xlsx_path):
 
 # ── 提示词改写 ───────────────────────────────────────────────────────
 
-def rewrite_prompt(prompt, char, scene, prop, sup_chars):
-    """在提示词前插入参考句，并替换角色名为图片引用。"""
+def compute_slots(char, scene, prop, sup_chars):
+    """计算槽位分配 {资产名: (ref_image槽位索引, 图片编号)}。
+
+    有主角色: 主角色=ref0(图片1), 场景=ref1(图片2), 道具=ref2(图片3), 配角1=ref3(图片4)
+    纯场景:   场景=ref0(图片1), 道具=ref1(图片2), 配角1=ref2(图片3)
+    超出槽位的资产（道具2/配角2）不进槽位，仅保留正文描述。
+    """
+    slots = {}
+    if char and char != "(纯场景)":
+        slots[char] = (0, 1)
+        if scene:
+            slots[scene] = (1, 2)
+        if prop:
+            slots[prop] = (2, 3)
+        if sup_chars:
+            slots[sup_chars[0]] = (3, 4)
+    else:
+        next_slot = 0
+        if scene:
+            slots[scene] = (next_slot, next_slot + 1)
+            next_slot += 1
+        if prop:
+            slots[prop] = (next_slot, next_slot + 1)
+            next_slot += 1
+        if sup_chars:
+            slots[sup_chars[0]] = (next_slot, next_slot + 1)
+            next_slot += 1
+    return slots
+
+
+def build_ref_sentences(slots, char, scene, prop, sup_chars):
+    """构建前缀参考句（使用<图片N>，与正文一致）。"""
     refs = []
-
-    # 参考句
     if char and char != "(纯场景)":
-        refs.append(f"使用<Picture 1>作为{char}的身份参考（驱动其身份）")
+        refs.append(f"使用<图片1>作为{char}的身份参考（驱动其身份）")
     if scene:
-        refs.append(f"使用<Picture 2>作为{scene}场景环境参考")
-    if char and prop and char != "(纯场景)":
-        refs.append(f"使用<Picture 3>作为{prop}道具参考，图片1中的角色佩戴<图片3>中的{prop}。")
+        refs.append(f"使用<图片{slots[scene][1]}>作为{scene}场景环境参考")
+    if prop:
+        refs.append(f"使用<图片{slots[prop][1]}>作为{prop}道具参考")
+    if sup_chars:
+        sup = sup_chars[0]
+        refs.append(f"使用<图片{slots[sup][1]}>作为{sup}的身份参考（驱动其身份）")
+    return "，".join(refs) + "。" if refs else ""
 
-    # 配角参考句
-    pic_idx = 4
-    for sup in sup_chars:
-        if sup:
-            refs.append(f"使用<Picture {pic_idx}>作为{sup}的身份参考（驱动其身份）。")
-            pic_idx += 1
 
-    ref_str = "，".join(refs)
-    if ref_str:
-        ref_str += "。"
-
-    # 简单替换：主角色名 → 图片1中的角色
-    result = prompt
+def build_ref_constraints(slots, char, scene, prop, sup_chars):
+    """构建【参考图约束】节（按槽位顺序）。"""
+    entries = []
     if char and char != "(纯场景)":
-        result = result.replace(char, "图片1中的角色")
+        entries.append(
+            f"以 <图片1>（{char}角色定妆照） 为基准，严格保持{char}的外观、体态、服饰完全一致，不得身份漂移；"
+            f"初始姿态从 <图片1>（{char}角色定妆照） 呈现的状态开始")
+    if scene:
+        n = slots[scene][1]
+        entries.append(f"以 <图片{n}>（{scene}场景参考图） 为基准，保持场景空间布局、光线方向完全一致")
+    if prop:
+        n = slots[prop][1]
+        entries.append(f"以 <图片{n}>（{prop}道具参考图） 为基准，保持{prop}外观与摆放一致")
+    if sup_chars:
+        sup = sup_chars[0]
+        n = slots[sup][1]
+        entries.append(
+            f"以 <图片{n}>（{sup}角色定妆照） 为基准，严格保持{sup}的外观、体态、服饰完全一致，不得身份漂移；"
+            f"初始姿态从 <图片{n}>（{sup}角色定妆照） 呈现的状态开始")
+    return "；".join(entries) + "。" if entries else "无参考图（纯文本/黑场）"
 
-    # 配角名 → 图片N中的{配角名}
-    pic_idx = 4
-    for sup in sup_chars:
-        if sup and sup in result:
-            result = result.replace(sup, f"图片{pic_idx}中的{sup}")
-            pic_idx += 1
 
-    return ref_str + result
+def build_constraints(slots, char, scene, prop, sup_chars, duration):
+    """构建【约束条件】节（按槽位顺序）。"""
+    entries = []
+    if char and char != "(纯场景)":
+        entries.append("图片1中的角色外观严格与 <图片1> 一致")
+    if scene:
+        n = slots[scene][1]
+        entries.append(f"画面场景与 <图片{n}> 一致")
+    if prop:
+        n = slots[prop][1]
+        entries.append(f"{prop}与 <图片{n}> 一致")
+    if sup_chars:
+        sup = sup_chars[0]
+        n = slots[sup][1]
+        entries.append(f"图片{n}中的{sup}外观严格与 <图片{n}> 一致")
+    dur_str = str(int(duration)) if float(duration).is_integer() else str(duration)
+    entries.append(f"16:9，{dur_str}秒精确")
+    return "；".join(entries) + "。"
+
+
+def split_sections(prompt):
+    """按【节名】分割提示词，返回 [(name, content), ...]。"""
+    pattern = re.compile(r'【([^】]+)】')
+    matches = list(pattern.finditer(prompt))
+    sections = []
+    if not matches:
+        return [("", prompt)]
+    if matches[0].start() > 0:
+        sections.append(("", prompt[:matches[0].start()]))
+    for i, m in enumerate(matches):
+        name = m.group(1)
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(prompt)
+        sections.append((name, prompt[start:end]))
+    return sections
+
+
+def replace_names(text, name_map):
+    """替换角色名，长名优先避免重叠（占位符法）。"""
+    if not name_map:
+        return text
+    placeholders = {}
+    for i, old in enumerate(sorted(name_map.keys(), key=len, reverse=True)):
+        ph = f"\x00PH{i}\x00"
+        text = text.replace(old, ph)
+        placeholders[ph] = name_map[old]
+    for ph, new in placeholders.items():
+        text = text.replace(ph, new)
+    return text
+
+
+def rewrite_prompt(prompt, char, scene, prop, sup_chars, duration):
+    """重建提示词：统一参考句 + 参考图约束 + 约束条件，使图片编号与槽位分配一致。"""
+    slots = compute_slots(char, scene, prop, sup_chars)
+
+    # 角色名替换映射（仅正文节；参考图约束/约束条件单独重建）
+    name_map = {}
+    if char and char != "(纯场景)":
+        name_map[char] = "图片1中的角色"
+    if sup_chars:
+        sup = sup_chars[0]
+        if sup in slots:
+            name_map[sup] = f"图片{slots[sup][1]}中的{sup}"
+    # 配角2无槽位，不替换（保留原名）
+
+    sections = split_sections(prompt)
+    rebuilt = []
+    for name, content in sections:
+        if name == "参考图约束":
+            rebuilt.append(f"【参考图约束】{build_ref_constraints(slots, char, scene, prop, sup_chars)}")
+        elif name == "约束条件":
+            rebuilt.append(f"【约束条件】{build_constraints(slots, char, scene, prop, sup_chars, duration)}")
+        elif name == "":
+            rebuilt.append(content)
+        else:
+            rebuilt.append(f"【{name}】{replace_names(content, name_map)}")
+
+    body = "".join(rebuilt)
+    ref_str = build_ref_sentences(slots, char, scene, prop, sup_chars)
+    return ref_str + body
 
 
 # ── 多链 JSON 生成 ───────────────────────────────────────────────────
@@ -391,7 +502,7 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     # 一次运行生成 N 个 .pt。PrimitiveStringMultiline 输出完整字符串不拆分。
     pl_id = idgen.node()
     raw_prompt = shot.get("完整提示词", "")
-    rewritten = rewrite_prompt(raw_prompt, char, scene, prop, sup_chars)
+    rewritten = rewrite_prompt(raw_prompt, char, scene, prop, sup_chars, duration)
 
     pl_node = make_node(
         pl_id, "PrimitiveStringMultiline", f"H3 Prompt ({shot_id})",
@@ -410,61 +521,41 @@ def build_shot_chain(idgen, shot, shared_refs, load_nodes, asset_paths, x_offset
     enc_id = idgen.node()
 
     # 构建 ref_image 输入（与 H3SaveConditioning 共享同一 LoadImage 源）
-    enc_inputs = []
-    ref_image_links = {}  # index -> link_id，供 H3SaveConditioning 复用同一来源
-    # ref_image_0 (主角色)
+    # 槽位分配（与 compute_slots 一致）：
+    #   有主角色: 主=ref0(图片1)/场景=ref1(图片2)/道具=ref2(图片3)/配角1=ref3(图片4)
+    #   纯场景:   场景=ref0(图片1)/道具=ref1(图片2)/配角1=ref2(图片3)
+    slots = compute_slots(char, scene, prop, sup_chars)
+    asset_types = {}
     if char and char != "(纯场景)":
-        ln = load_nodes.get(("char", char))
-        if ln:
-            lid = idgen.link()
-            enc_inputs.append(make_input("ref_image_0", "IMAGE", link=lid))
-            links.append([lid, ln, 0, enc_id, 2, "IMAGE"])
-            ref_image_links[0] = (ln, lid)
-        else:
-            enc_inputs.append(make_input("ref_image_0", "IMAGE", link=None))
-    else:
-        enc_inputs.append(make_input("ref_image_0", "IMAGE", link=None))
-
-    # ref_image_1 (场景)——找不到真实资产时挂空 load 占位，避免 ref 槽位缺失
-    scene_ln = load_nodes.get(("scene", scene)) if scene else None
-    if scene_ln is None:
-        scene_ln = load_nodes.get(("scene", "__placeholder__"))
-    if scene_ln:
-        lid = idgen.link()
-        enc_inputs.append(make_input("ref_image_1", "IMAGE", link=lid))
-        links.append([lid, scene_ln, 0, enc_id, 3, "IMAGE"])
-        ref_image_links[1] = (scene_ln, lid)
-    else:
-        enc_inputs.append(make_input("ref_image_1", "IMAGE", link=None))
-
-    # ref_image_2 (道具)——找不到真实资产时挂空 load 占位，避免 ref 槽位缺失
-    prop_ln = load_nodes.get(("prop", prop)) if prop else None
-    if prop_ln is None:
-        prop_ln = load_nodes.get(("prop", "__placeholder__"))
-    if prop_ln:
-        lid = idgen.link()
-        enc_inputs.append(make_input("ref_image_2", "IMAGE", link=lid))
-        links.append([lid, prop_ln, 0, enc_id, 4, "IMAGE"])
-        ref_image_links[2] = (prop_ln, lid)
-    else:
-        enc_inputs.append(make_input("ref_image_2", "IMAGE", link=None))
-
-    # ref_image_3 (配角，H3EncodeConditioning 只有 ref_image_0~3，最多接 1 个配角图)
-    pic_idx = 3
+        asset_types[char] = "char"
+    if scene:
+        asset_types[scene] = "scene"
+    if prop:
+        asset_types[prop] = "prop"
     for sup in sup_chars:
-        if pic_idx >= 4:
-            print(f"[WARN] {shot_id}: {sup} 无参考图槽位（最多 1 个配角图），"
-                  f"提示词中的 <Picture {pic_idx + 1}> 将无图对应")
-            break
-        ln = load_nodes.get(("char", sup))
-        if ln:
-            lid = idgen.link()
-            enc_inputs.append(make_input(f"ref_image_{pic_idx}", "IMAGE", link=lid))
-            links.append([lid, ln, 0, enc_id, 2 + pic_idx, "IMAGE"])
-            ref_image_links[pic_idx] = (ln, lid)
+        asset_types[sup] = "char"
+
+    enc_inputs = []
+    ref_image_links = {}  # index -> (load_node_id, link_id)，供 H3SaveConditioning 复用同一来源
+    slot_assets = {si: name for name, (si, _pn) in slots.items()}
+    for si in range(4):
+        if si in slot_assets:
+            name = slot_assets[si]
+            atype = asset_types.get(name, "char")
+            ln = load_nodes.get((atype, name))
+            if atype == "scene" and ln is None:
+                ln = load_nodes.get(("scene", "__placeholder__"))
+            if atype == "prop" and ln is None:
+                ln = load_nodes.get(("prop", "__placeholder__"))
+            if ln:
+                lid = idgen.link()
+                enc_inputs.append(make_input(f"ref_image_{si}", "IMAGE", link=lid))
+                links.append([lid, ln, 0, enc_id, 2 + si, "IMAGE"])
+                ref_image_links[si] = (ln, lid)
+            else:
+                enc_inputs.append(make_input(f"ref_image_{si}", "IMAGE", link=None))
         else:
-            enc_inputs.append(make_input(f"ref_image_{pic_idx}", "IMAGE", link=None))
-        pic_idx += 1
+            enc_inputs.append(make_input(f"ref_image_{si}", "IMAGE", link=None))
 
     # CLIP 连接
     clip_lid = idgen.link()

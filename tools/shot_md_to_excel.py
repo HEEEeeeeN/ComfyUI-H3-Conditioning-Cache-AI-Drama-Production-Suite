@@ -59,12 +59,28 @@ def parse_md(md_path):
         if not re.match(r"^[A-Z]\d+", shot_id):
             continue
 
+        # 处理一行内可能用 "|" 合并的多个键值对（如 "参演角色 | 场景参考 | 道具参考"）
+        def _split_kv_line(line):
+            """拆分一行中可能含多个 |**key**: val 的键值对。返回 [(key, val), ...]"""
+            m = re.match(r"-\s*\*\*(.+?)\*\*:\s*(.*)$", line)
+            if not m:
+                return []
+            key, rest = m.group(1), m.group(2)
+            results = []
+            while True:
+                m2 = re.match(r"(.*?)\s*\|\s*\*\*([^*]+)\*\*:\s*(.*)$", rest, re.DOTALL)
+                if not m2:
+                    results.append((key, rest.strip()))
+                    break
+                cur_val, nk, nrest = m2.group(1), m2.group(2), m2.group(3)
+                results.append((key, cur_val.strip()))
+                key, rest = nk, nrest
+            return results
+
         shot = {"id": shot_id}
         for line in lines[1:]:
             line = line.strip()
-            m = re.match(r"-\s*\*\*(.+?)\*\*:\s*(.*)", line)
-            if m:
-                key, val = m.group(1), m.group(2).strip()
+            for key, val in _split_kv_line(line):
                 shot[key] = val
 
         prompt_match = re.search(
@@ -110,7 +126,22 @@ SHEET2_HEADERS = ["类型", "名称", "input路径"]
 def _split_assets(val):
     if not val or val == "(无)":
         return []
-    return [s.strip() for s in val.split(",") if s.strip() and s.strip() != "(无)"]
+    # 同时按逗号和顿号拆分（道具常含顿号），并清理 "| **键**: 值" 残留
+    raw_parts = re.split(r"[,、]", val)
+    out = []
+    for s in raw_parts:
+        s = s.strip()
+        if not s or s in ("(无)", "(黑场)"):
+            continue
+        # 去掉 "| **场景参考**: xxx" 这类残留
+        s = re.split(r"\|\s*\*\*", s)[0].strip()
+        # 清理角色括号前缀如 "(剪影·金止戈)" -> "金止戈"、"(群演·游击队员)" -> "游击队员"
+        # 兼容多角色同括号被顿号切开的情况（如 "(剪影·金止戈、" 与 "赤丸冢羽)"）
+        s = re.sub(r"^\((?:剪影|群演)?[··]?\s*", "", s)
+        s = s.rstrip(")")
+        if s:
+            out.append(s)
+    return out
 
 
 def _col_letter(col_idx):
