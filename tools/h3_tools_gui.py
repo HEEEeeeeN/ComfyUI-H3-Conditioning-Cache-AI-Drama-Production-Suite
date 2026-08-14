@@ -2,11 +2,17 @@
 """AI剧生产套件 - 独立桌面 GUI 工具
 
 五标签页：
-  Tab 1: MD → Excel（分镜头需求MD转审阅表Excel）
+  Tab 1: MD → Excel（分镜头需求 / H3提示词 MD 转审阅表 Excel + 规范自检）
   Tab 2: 资产管理（收集/映射/上传美术资产路径）
   Tab 3: Excel → JSON（审阅表Excel转多链生产JSON）
   Tab 4: .pt 元数据读取器（扫描 .pt 缓存文件，查看时长/分辨率/提示词等）
   Tab 5: 资产准备表 → Krea2 JSON（美术资产准备表MD转Krea2工作流JSON）
+
+Tab 1 支持三种 MD 格式（自动检测）：
+  - 分镜头需求（旧格式 ### A01 + H3提示词）
+  - 分镜头需求 v6（#### 镜头N + 10字段，不含 H3 提示词）
+  - H3 提示词（## A01 九分节格式）
+  并提供规范自检（指代不明/对白格式/画风冲突/时长一致性）与报告导出。
 
 依赖同目录的 shot_md_to_excel.py、excel_to_multi_chain_json.py、pt_meta_reader.py、
 asset_md_to_krea2_json.py。
@@ -190,16 +196,16 @@ class H3ToolsApp:
     # ── Tab 1: MD → Excel ──
 
     def _build_tab_md_to_excel(self, parent):
-        """构建 MD → Excel 标签页。"""
+        """构建 MD → Excel 标签页（支持分镜头需求 / H3提示词 双格式 + 规范自检）。"""
         # 文件列表区域
-        file_frame = ttk.LabelFrame(parent, text="分镜头需求 MD 文件")
+        file_frame = ttk.LabelFrame(parent, text="MD 文件（分镜头需求 / H3提示词）")
         file_frame.pack(fill=tk.X, padx=10, pady=(10, 5))
 
         list_container = ttk.Frame(file_frame)
         list_container.pack(fill=tk.X, padx=8, pady=4)
 
         self.md_listbox = tk.Listbox(
-            list_container, height=6, selectmode=tk.EXTENDED,
+            list_container, height=5, selectmode=tk.EXTENDED,
             font=("Consolas", 9),
         )
         md_scroll = ttk.Scrollbar(list_container, orient=tk.VERTICAL,
@@ -218,6 +224,32 @@ class H3ToolsApp:
         ttk.Button(btn_frame, text="清空",
                    command=self._md_clear).pack(side=tk.LEFT, padx=4)
 
+        # 格式选择
+        fmt_frame = ttk.LabelFrame(parent, text="MD 格式")
+        fmt_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        fmt_container = ttk.Frame(fmt_frame)
+        fmt_container.pack(fill=tk.X, padx=8, pady=6)
+        ttk.Label(fmt_container, text="格式:").pack(side=tk.LEFT, padx=(0, 4))
+        self.md_format_var = tk.StringVar(value="auto")
+        self.md_format_combo = ttk.Combobox(
+            fmt_container, textvariable=self.md_format_var,
+            state="readonly", width=30,
+        )
+        self.md_format_combo['values'] = [
+            "自动检测（推荐）",
+            "分镜头需求（旧格式 ### A01）",
+            "分镜头需求 v6（#### 镜头N + 10字段）",
+            "H3提示词（## A01 九分节）",
+        ]
+        self.md_format_combo.current(0)
+        self.md_format_combo.pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Label(
+            fmt_container,
+            text="分镜头需求与 H3 提示词已拆分，两者均可生成审阅表",
+            foreground="#888888",
+        ).pack(side=tk.LEFT)
+
         # 输出目录
         out_frame = ttk.LabelFrame(parent, text="输出目录")
         out_frame.pack(fill=tk.X, padx=10, pady=5)
@@ -230,25 +262,54 @@ class H3ToolsApp:
         ttk.Button(out_container, text="浏览",
                    command=self._md_browse_output).pack(side=tk.LEFT)
 
-        # 开始按钮（tkinter default 样式, 高度2）
+        # 操作按钮行：开始生成 + 规范自检
+        action_frame = ttk.Frame(parent)
+        action_frame.pack(fill=tk.X, padx=20, pady=6)
         self.md_run_btn = tk.Button(
-            parent, text="开始生成", height=2,
+            action_frame, text="开始生成", height=2,
             font=("Microsoft YaHei UI", 12, "bold"),
             bg="#4a90d9", fg="white",
             activebackground="#5ba0e9", activeforeground="white",
             disabledforeground="#cccccc",
             command=self._md_start,
         )
-        self.md_run_btn.pack(fill=tk.X, padx=20, pady=10)
+        self.md_run_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
+        self.md_check_btn = tk.Button(
+            action_frame, text="规范自检", height=2,
+            font=("Microsoft YaHei UI", 12, "bold"),
+            bg="#d98a4a", fg="white",
+            activebackground="#e9a05b", activeforeground="white",
+            disabledforeground="#cccccc",
+            command=self._md_check_spec,
+        )
+        self.md_check_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(6, 0))
 
         # 日志区域
         log_frame = ttk.LabelFrame(parent, text="日志")
-        log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(5, 10))
+        log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(5, 5))
         self.md_log = scrolledtext.ScrolledText(
-            log_frame, height=12, font=("Consolas", 9),
+            log_frame, height=8, font=("Consolas", 9),
             state=tk.DISABLED, wrap=tk.WORD,
         )
         self.md_log.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+
+        # 自检报告区域
+        report_frame = ttk.LabelFrame(parent, text="规范自检报告")
+        report_frame.pack(fill=tk.BOTH, expand=False, padx=10, pady=(0, 10))
+        report_toolbar = ttk.Frame(report_frame)
+        report_toolbar.pack(fill=tk.X, padx=8, pady=(4, 0))
+        self.md_report_summary = ttk.Label(report_toolbar, text="尚未执行自检", foreground="#888888")
+        self.md_report_summary.pack(side=tk.LEFT)
+        ttk.Button(report_toolbar, text="导出报告(.md)",
+                   command=self._md_export_report).pack(side=tk.RIGHT)
+        self.md_report = scrolledtext.ScrolledText(
+            report_frame, height=7, font=("Consolas", 9),
+            state=tk.DISABLED, wrap=tk.WORD,
+        )
+        self.md_report.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+        self._md_report_lines = []   # 最近一次自检报告行
+        self._md_report_errors = 0   # 最近一次自检错误数
+        self._md_report_warns = 0    # 最近一次自检警告数
 
     # ── Tab 2: 资产管理 ──
 
@@ -415,9 +476,9 @@ class H3ToolsApp:
     # ── Tab 1 方法 ──
 
     def _md_add_files(self):
-        """添加 MD 文件（支持多选）。"""
+        """添加 MD 文件（支持多选，分镜头需求 / H3提示词）。"""
         files = filedialog.askopenfilenames(
-            title="选择分镜头需求 MD 文件",
+            title="选择分镜头需求或 H3 提示词 MD 文件",
             filetypes=[("Markdown 文件", "*.md"), ("所有文件", "*.*")],
         )
         if not files:
@@ -426,6 +487,17 @@ class H3ToolsApp:
         for f in files:
             if f not in existing:
                 self.md_listbox.insert(tk.END, f)
+
+    def _md_get_format(self):
+        """返回当前选择的格式标识: "auto"/"storyboard"/"storyboard_v6"/"h3_prompt"。"""
+        idx = self.md_format_combo.current()
+        return ["auto", "storyboard", "storyboard_v6", "h3_prompt"][idx] if idx >= 0 else "auto"
+
+    def _md_resolve_format(self, md_path, forced):
+        """根据强制格式或自动检测返回实际格式。"""
+        if forced == "auto":
+            return self.md_module.detect_format(md_path)
+        return forced
 
     def _md_remove_selected(self):
         """删除 Listbox 中选中的项（从后往前删避免索引错乱）。"""
@@ -460,6 +532,8 @@ class H3ToolsApp:
             messagebox.showwarning("提示", "请选择输出目录。")
             return
 
+        fmt = self._md_get_format()
+
         # 保存 MD 文件列表，供 Tab2 资产收集使用
         self.md_files = list(files)
 
@@ -468,35 +542,50 @@ class H3ToolsApp:
 
         # 启动后台线程
         thread = threading.Thread(
-            target=self._md_worker, args=(files, output_dir), daemon=True,
+            target=self._md_worker, args=(files, output_dir, fmt), daemon=True,
         )
         thread.start()
 
-    def _md_worker(self, md_files, output_dir):
-        """后台线程：执行 MD → Excel 转换。"""
+    def _md_worker(self, md_files, output_dir, forced_fmt="auto"):
+        """后台线程：执行 MD → Excel 转换（支持双格式 + 格式检测）。"""
         log = lambda msg: self._log("md", msg)
         success, fail = 0, 0
 
         try:
             log(f"=== 开始处理: {len(md_files)} 个 MD 文件 ===")
             log(f"输出目录: {output_dir}")
+            log(f"格式: {forced_fmt}")
             log("")
 
-            if len(md_files) == 1:
-                # 单文件模式：输出到输出目录下的同名 Excel
-                md_path = md_files[0]
+            for i, md_path in enumerate(md_files, 1):
+                fmt = self._md_resolve_format(md_path, forced_fmt)
+                if not fmt:
+                    log(f"[{i}/{len(md_files)}] {Path(md_path).name} -> 无法识别格式，跳过")
+                    fail += 1
+                    continue
+
                 stem = Path(md_path).stem
-                out_name = stem.replace("分镜头需求", "提示词审阅表") + ".xlsx"
+                out_name = (stem.replace("分镜头需求", "提示词审阅表")
+                                .replace("H3提示词", "提示词审阅表")) + ".xlsx"
                 out_path = os.path.join(output_dir, out_name)
 
-                log(f"[1/1] {Path(md_path).name}")
-                ok = self.md_module.process_single(md_path, out_path, log=log)
-                success, fail = (1, 0) if ok else (0, 1)
-            else:
-                # 批量模式
-                success, fail = self.md_module.process_batch(
-                    md_files, output_dir, log=log
-                )
+                log(f"[{i}/{len(md_files)}] {Path(md_path).name} ({fmt})")
+                if fmt == "h3_prompt":
+                    ok = self.md_module.process_h3_prompt_single(
+                        md_path, out_path, log=log)
+                elif fmt == "storyboard_v6":
+                    ok = self.md_module.process_storyboard_v6_single(
+                        md_path, out_path, log=log)
+                elif fmt == "storyboard":
+                    ok = self.md_module._process_storyboard_single(
+                        md_path, out_path, log=log)
+                else:
+                    ok = self.md_module.process_single(md_path, out_path, log=log)
+
+                if ok:
+                    success += 1
+                else:
+                    fail += 1
 
             log(f"\n=== 完成: {success} 成功, {fail} 失败 ===")
 
@@ -509,6 +598,114 @@ class H3ToolsApp:
             # 无论成功失败，都通知主线程收集资产并切换 Tab
             self.log_queue.put(("assets_ready",))
             self.log_queue.put(("done", "md", success, fail))
+
+    # ── Tab 1 规范自检方法 ──
+
+    def _md_check_spec(self):
+        """对选中的 H3 提示词 MD 执行规范自检（后台线程）。"""
+        if self.md_module is None:
+            messagebox.showerror("错误", "shot_md_to_excel.py 模块未加载，无法执行。")
+            return
+
+        files = list(self.md_listbox.get(0, tk.END))
+        if not files:
+            messagebox.showwarning("提示", "请先添加至少一个 MD 文件。")
+            return
+
+        # 只对 H3 提示词格式执行自检
+        h3_files = []
+        for f in files:
+            fmt = self._md_resolve_format(f, self._md_get_format())
+            if fmt == "h3_prompt":
+                h3_files.append(f)
+            else:
+                self._log("md", f"跳过（非H3提示词格式）: {Path(f).name}")
+
+        if not h3_files:
+            messagebox.showwarning(
+                "提示",
+                "规范自检仅支持 H3 提示词格式（## A01 九分节）文件。\n"
+                "请添加 H3 提示词 MD 文件，或检查格式选择。",
+            )
+            return
+
+        self.md_check_btn.configure(state=tk.DISABLED)
+        thread = threading.Thread(
+            target=self._md_check_spec_worker, args=(h3_files,), daemon=True,
+        )
+        thread.start()
+
+    def _md_check_spec_worker(self, h3_files):
+        """后台线程：执行规范自检。"""
+        log = lambda msg: self._log("md", msg)
+        all_lines = []
+        n_err = n_warn = 0
+
+        try:
+            log(f"=== 规范自检: {len(h3_files)} 个 H3 提示词文件 ===")
+            for i, md_path in enumerate(h3_files, 1):
+                log(f"[{i}/{len(h3_files)}] {Path(md_path).name}")
+                report, e, w = self.md_module.spec_check_h3_prompt(md_path, log=log)
+                all_lines.extend(report)
+                all_lines.append("")
+                n_err += e
+                n_warn += w
+
+            log(f"=== 自检完成: {n_err} 错误, {n_warn} 警告 ===")
+        except Exception as e:
+            log(f"\n[错误] 自检过程中发生异常: {e}")
+            import traceback
+            log(traceback.format_exc())
+            all_lines.append(f"[错误] 自检异常: {e}")
+
+        finally:
+            self._md_report_lines = all_lines
+            self._md_report_errors = n_err
+            self._md_report_warns = n_warn
+            self.log_queue.put(("md_report_ready",))
+
+    def _md_export_report(self):
+        """将最近一次自检报告导出为 .md 文件。"""
+        if not self._md_report_lines:
+            messagebox.showwarning("提示", "尚无自检报告可导出，请先执行规范自检。")
+            return
+
+        path = filedialog.asksaveasfilename(
+            title="导出规范自检报告",
+            defaultextension=".md",
+            filetypes=[("Markdown 文件", "*.md"), ("所有文件", "*.*")],
+            initialfile="规范自检报告.md",
+        )
+        if not path:
+            return
+
+        try:
+            self.md_module.save_spec_report(self._md_report_lines, path)
+            self._log("md", f"自检报告已导出: {path}")
+            messagebox.showinfo("成功", f"自检报告已导出到:\n{path}")
+        except Exception as e:
+            self._log("md", f"导出失败: {e}")
+            messagebox.showerror("错误", f"导出失败: {e}")
+
+    def _md_show_report(self):
+        """在主线程中填充自检报告区域。"""
+        self.md_report.configure(state=tk.NORMAL)
+        self.md_report.delete("1.0", tk.END)
+        self.md_report.insert("1.0", "\n".join(self._md_report_lines))
+        self.md_report.configure(state=tk.DISABLED)
+
+        if self._md_report_errors:
+            summary = f"自检完成: {self._md_report_errors} 错误, {self._md_report_warns} 警告（需修复）"
+            color = "#cc0000"
+        elif self._md_report_warns:
+            summary = f"自检完成: 0 错误, {self._md_report_warns} 警告（建议检查）"
+            color = "#cc8800"
+        else:
+            summary = "自检通过: 0 错误, 0 警告"
+            color = "#008800"
+        self.md_report_summary.config(text=summary, foreground=color)
+
+        self.md_check_btn.configure(state=tk.NORMAL)
 
     # ── Tab 2 方法 ──
 
@@ -1368,6 +1565,9 @@ class H3ToolsApp:
 
             elif msg_type == "assets_ready":
                 self._populate_asset_tab()
+
+            elif msg_type == "md_report_ready":
+                self._md_show_report()
 
             elif msg_type == "pt_results":
                 _, metadata_list = item

@@ -47,7 +47,7 @@ flowchart LR
 
     subgraph SUITE["AI剧生产套件 · 生产端剥离"]
         direction LR
-        B1["剧本 + 美术资产"] --> B2["分镜头需求 MD"] --> B3["提示词审阅表 Excel"] --> B4["审查提示词（一次）"] --> B5["多链生产 JSON"] --> B6["批量预编码 .pt 缓存"] --> B7["批量提交云算力<br/>多种子 · 高分辨率 · 长时长"] --> B8["挑合适镜头 · 剪辑成片"]
+        B1["剧本 + 美术资产"] --> B2["分镜头需求 MD + H3提示词 MD"] --> B3["提示词审阅表 Excel<br/>（含规范自检）"] --> B4["审查提示词（一次）"] --> B5["多链生产 JSON"] --> B6["批量预编码 .pt 缓存"] --> B7["批量提交云算力<br/>多种子 · 高分辨率 · 长时长"] --> B8["挑合适镜头 · 剪辑成片"]
     end
 ```
 
@@ -85,7 +85,9 @@ flowchart LR
 
 ## 分镜导演 Skill / Storyboard Director Skill
 
-> 本仓库附带一个**分镜导演** Skill（`skills/storyboard-director/`），负责生产链路的第一环：把**任意剧本 / 场景描述**转成合格的分镜头需求 MD（含 H3 提示词、美术资产需求），供下游工具链消费。
+> 本仓库附带两个 Skill，负责生产链路的第一环：
+> - **分镜导演**（`skills/storyboard-director/`）：把**任意剧本 / 场景描述**转成合格的分镜头需求 MD（含镜头调度、美术资产需求），供下游工具链消费。
+> - **H3 提示词编写**（`skills/h3-prompt-writer/`）：把分镜头需求逐镜转成 **H3 提示词 MD**（`## A01` 九分节格式），供提示词审阅与规范自检消费。
 
 ### Skill 是什么 / What the Skill Does
 
@@ -121,11 +123,12 @@ skills/storyboard-director/
 
 ### 与下游工具链的衔接 / Integration
 
-Skill 输出的 **分镜头需求_第X集.md** 直接接入套件工具链：
+Skill 输出的 **分镜头需求_第X集.md** 直接接入套件工具链（H3 提示词由 `h3-prompt-writer` Skill 另行生成）：
 
 ```
 剧本 → 分镜导演 Skill → 分镜头需求_第X集.md
-       → shot_md_to_excel.py → 提示词审阅表.xlsx（人工审阅）
+       → h3-prompt-writer Skill → H3提示词_第X集.md（## A01 九分节）
+       → shot_md_to_excel.py → 提示词审阅表.xlsx（人工审阅 + 规范自检）
        → excel_to_multi_chain_json.py → 多链生产 JSON
        → 批量预编码 .pt → 批量生成视频
 ```
@@ -389,13 +392,14 @@ This repo's `tools/` directory provides a toolchain that converts shot requireme
 
 ```
 分镜头需求_第X集.md  →  shot_md_to_excel.py  →  提示词审阅表.xlsx  →  excel_to_multi_chain_json.py  →  多链生产JSON
+H3提示词_第X集.md    ↗                            （含规范自检）
 
 > 生成的多链 JSON 中，**每个镜头拥有独立的分辨率选择器与时长节点**，支持整集不同镜头混用 0.4/0.5 分辨率与不同时长，无需按时长分组。
 ```
 
 | 工具 | 功能 | 输入 | 输出 |
 | --- | --- | --- | --- |
-| `shot_md_to_excel.py` | 解析分镜头需求 MD，生成提示词审阅表 Excel（含分辨率下拉 0.4/0.5、可编辑时长列） | `.md` 文件 | `.xlsx`（Sheet1 审阅 + Sheet2 资产路径 + Sheet3 说明） |
+| `shot_md_to_excel.py` | 解析**三种格式**MD（分镜头需求 / v6 / H3提示词），自动检测格式，生成审阅表 Excel + 规范自检 | `.md` 文件 | `.xlsx`（Sheet1 审阅 + Sheet2 资产路径 + Sheet3 说明）+ 自检报告 |
 | `excel_to_multi_chain_json.py` | 读取审阅后的 Excel，生成多链生产 JSON（每镜**独立**分辨率+时长节点） | `.xlsx` 文件 | ComfyUI workflow JSON（按角色分组或 `--by-shot` 按镜头分组） |
 | `h3_tools_gui.py` | **推荐**：桌面 GUI 工具，三标签页（MD→Excel / 资产管理 / Excel→JSON），统一批量处理 | 多个文件 | 批量输出 |
 
@@ -412,7 +416,7 @@ This repo's `tools/` directory provides a toolchain that converts shot requireme
 python tools/h3_tools_gui.py
 ```
 
-1. **Tab 1（MD→Excel）**：选择分镜头需求 MD 文件，生成提示词审阅表 `.xlsx`。
+1. **Tab 1（MD→Excel）**：选择分镜头需求 / H3提示词 MD 文件（自动检测格式），生成审阅表 `.xlsx`，并可一键执行**规范自检**。
 2. **Tab 2（资产管理）**：上传/填写美术资产路径（角色/场景/道具），可保存为映射 JSON。
 3. **Tab 3（Excel→JSON）**：读取审阅后的 Excel（结合资产映射），生成多链生产 JSON。
 
@@ -422,13 +426,37 @@ python tools/h3_tools_gui.py
 - 时长列直接编辑数值（支持 `11秒` 这类带单位写法，脚本自动解析）。
 - 在 Sheet2 填写/核对各资产在 ComfyUI `input/` 目录下的相对路径。
 
+### 规范自检 / Specification Self-Check
+
+> 分镜头需求与 H3 提示词拆分为独立文件后，**规范自检**（`shot_md_to_excel.py` 的 `spec_check_h3_prompt`，GUI Tab 1 内置）在生成审阅表前先扫描 H3 提示词 MD，把不合规处直接标成**错误 / 警告**，避免带病提示词进入生产。
+
+自检覆盖以下规则：
+
+| 检查项 | 级别 | 说明 |
+| --- | --- | --- |
+| 缺失分节 | 错误 | 九分节（输出规格/参考图约束/整体风格/场景描述/两级时间轴/摄影与摄像机/光影/声音/约束条件）缺一即报 |
+| 指代不明 | 错误 | 命中"人影 / 一个人 / 那个人 / 身影 / 剪影中的人"等无主指代，附上下文行 |
+| 对白格式 | 错误 | `<d>` 台词缺语言标签（`[Chinese]` 等 6 类）或缺性别标签（`[男]/[女]/[群杂]`） |
+| 画风锚点 | 警告 | 【整体风格】缺少画风锚点（如 `D4rkL1nes`） |
+| 画风冲突 | 警告 | 【整体风格】出现"实拍 / 3D渲染 / photorealistic"等与 2D 赛璐璐冲突的词（"非/不/无"否定表述不计） |
+| 非叙事音乐 | 警告 | 【声音】含"非叙事音乐"但未写"无背景音乐，禁止任何配乐/音乐" |
+| 时长一致性 | 警告 | 【输出规格】时长与【两级时间轴】时长不一致 |
+| 参考图槽位 | 警告 | 【参考图约束】未使用 `<图片N>` 槽位写法 |
+
+自检报告在 GUI 中即时显示，可一键导出为 `.md` 存档；命令行下可用：
+
+```bash
+python -c "import sys; sys.path.insert(0,'tools'); import shot_md_to_excel as m; r,e,w=m.spec_check_h3_prompt('H3提示词_第1集.md'); print('\n'.join(r))"
+```
+
 ---
 
 ### 命令行方式 / CLI Alternative
 
 ```bash
-# 1. MD → Excel（单文件需用 -o 指定输出）
+# 1. MD → Excel（自动检测格式；分镜头需求 / v6 / H3提示词 均可）
 python tools/shot_md_to_excel.py 分镜头需求_第1集.md -o 提示词审阅表_第1集.xlsx
+python tools/shot_md_to_excel.py H3提示词_第1集.md -o 提示词审阅表_第1集.xlsx
 
 # 2. Excel → JSON（-m 加载资产映射补充路径；--by-shot 按镜头分组）
 python tools/excel_to_multi_chain_json.py 提示词审阅表_第1集.xlsx -o output/json/ -m assets_mapping.json --by-shot
